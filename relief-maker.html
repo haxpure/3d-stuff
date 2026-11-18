@@ -379,6 +379,7 @@ window.FS = (() => {
     'Browser storage is full — preset not saved.': 'Browserspeicher voll – Vorlage nicht gespeichert.',
     'This preset has more than 4 colors — switch the mode to "More colors" to use it.': 'Diese Vorlage hat mehr als 4 Farben – stell den Modus auf „Mehr Farben", um sie zu verwenden.',
     'POI in the middle of the map (your address)': 'POI in der Kartenmitte (deine Adresse)', 'Middle POI shape': 'Form des Mitte-POI', 'Center': 'Mitte',
+    'Enlarge the map until this trail fits (center stays)': 'Karte vergrößern, bis dieser Weg ganz draufpasst (Mitte bleibt)', 'This trail already fits.': 'Dieser Weg passt schon ganz drauf.',
     // --- Full Spectrum mode ---
     'Full Spectrum pack (CMY + W/G)': 'Full-Spectrum-Set (CMY + W/G)', 'Filament pack': 'Filament-Set', 'T1 Cyan · T2 Magenta · T3 Yellow · T4 White / Gray': 'T1 Cyan · T2 Magenta · T3 Gelb · T4 Weiß / Grau',
     'Full Spectrum White Edition': 'Full Spectrum White Edition', 'Full Spectrum Gray Edition': 'Full Spectrum Gray Edition', 'Your colors (Full Spectrum)': 'Deine Farben (Full Spectrum)',
@@ -399,6 +400,8 @@ window.FS = (() => {
     [/^Added (\d+) hiking routes \(switched off\) — tick the ones you want printed\.$/, '$1 Wanderwege hinzugefügt (ausgeschaltet) – hake die an, die gedruckt werden sollen.'],
     [/^Added (\d+) POIs \((\d+) peaks, (\d+) huts\)\.$/, '$1 POIs hinzugefügt ($2 Gipfel, $3 Hütten).'], [/^Added POI "(.*)"\.$/, 'POI „$1" hinzugefügt.'],
     [/^Imported (\d+) trail\(s\), (\d+) waypoint\(s\) — moved the print area onto the track\.$/, '$1 Weg(e), $2 Wegpunkt(e) importiert – Druckbereich auf den Track verschoben.'],
+    [/^Imported (\d+) trail\(s\) — map enlarged to ([\d.]+) km so the whole track fits \(center unchanged\)\.$/, '$1 Weg(e) importiert – Karte auf $2 km vergrößert, damit der ganze Track draufpasst (Mitte bleibt).'],
+    [/^Trail added — map enlarged to ([\d.]+) km so it fits\.$/, 'Weg hinzugefügt – Karte auf $1 km vergrößert, damit er draufpasst.'], [/^Map enlarged to ([\d.]+) km\.$/, 'Karte auf $1 km vergrößert.'],
     [/^Imported (\d+) trail\(s\), (\d+) waypoint\(s\) as POIs\.$/, '$1 Weg(e) und $2 Wegpunkt(e) als POIs importiert.'], [/^Imported (\d+) trail\(s\)\.$/, '$1 Weg(e) importiert.'],
     [/^Created (\d+) filaments from the imagery — rename them to your spools and match the tools\.$/, '$1 Farben aus dem Satellitenbild erzeugt – benenne sie nach deinen Spulen und ordne die Tools zu.'],
     [/^3MF: (\d+) parts, ([\d.]+) M triangles, ([\d.]+) MB\. Load these filaments: /, '3MF: $1 Teile, $2 Mio. Dreiecke, $3 MB. Diese Filamente laden: '],
@@ -1331,7 +1334,8 @@ function finishTrail() {
   const pts = drawPts.filter((q, i) => !i || q[0] !== drawPts[i - 1][0] || q[1] !== drawPts[i - 1][1]);
   if (pts.length < 2) { setStatus('A trail needs at least two points.', true); return; }
   FEAT.trails.push({ id: FEAT.next++, name: `Trail ${FEAT.trails.length + 1}`, segs: [pts], on: true });
-  drawPts = []; drawLine.setLatLngs([]); featsChanged(); setStatus('Trail added.');
+  drawPts = []; drawLine.setLatLngs([]); featsChanged();
+  const km = growToFit(pts); setStatus(km ? `Trail added — map enlarged to ${km.toFixed(1)} km so it fits.` : 'Trail added.');
 }
 $('drawUndo').addEventListener('click', () => { drawPts.pop(); drawLine.setLatLngs(drawPts); });
 $('drawDone').addEventListener('click', finishTrail);
@@ -1361,7 +1365,7 @@ function renderFeatLists() {
   for (const t of FEAT.trails) {
     const cb = mk('input', { type: 'checkbox', checked: t.on, title: 'Print this trail' }); cb.addEventListener('change', () => { t.on = cb.checked; featsChanged(false); });
     const nm = mk('input', { type: 'text', value: t.name }); nm.addEventListener('input', () => { t.name = nm.value; saveFeat(); drawFeatures(); });
-    const fit = mk('button', { type: 'button', className: 'ib', textContent: '⌖', title: 'Fit the print area to this trail' }); fit.addEventListener('click', () => fitTo(t.segs.flat()));
+    const fit = mk('button', { type: 'button', className: 'ib', textContent: '⌖', title: 'Enlarge the map until this trail fits (center stays)' }); fit.addEventListener('click', () => { const km = growToFit(t.segs.flat()); setStatus(km ? `Map enlarged to ${km.toFixed(1)} km.` : 'This trail already fits.'); });
     const del = mk('button', { type: 'button', className: 'ib x', textContent: '×' }); del.addEventListener('click', () => { FEAT.trails = FEAT.trails.filter(x => x !== t); featsChanged(); });
     tl.append(mk('div', { className: 'item' }, cb, nm, mk('span', { className: 'meta', textContent: trailKm(t).toFixed(1) + ' km' }), fit, del));
   }
@@ -1392,6 +1396,15 @@ function fitTo(pts) {
   onLocationChange();
 }
 
+// enlarge the map around the current center until every point fits (+6 % margin); returns the new width or 0
+function growToFit(pts) {
+  const p = params(), kl = kmLon(p.lat); let dx = 0, dy = 0;
+  for (const [la, lo] of pts) { dx = Math.max(dx, Math.abs(lo - p.lon) * kl); dy = Math.max(dy, Math.abs(la - p.lat) * KM_LAT); }
+  const need = Math.min(200, Math.max(2 * dx, 2 * dy * p.printW / p.printD) * 1.06);
+  if (need <= p.areaKm + 1e-6) return 0;
+  $('areaKm').value = (Math.ceil(need * 10) / 10).toFixed(1); onLocationChange();
+  return +$('areaKm').value;
+}
 // --- track file import ---
 function decimate(pts, minM = 4) {
   pts = pts.filter(q => isFinite(q[0]) && isFinite(q[1]) && Math.abs(q[0]) <= 90);
@@ -1456,6 +1469,8 @@ $('impFile').addEventListener('change', async () => {
     if (all.length) {
       const [[s, w], [n, e]] = areaBounds(params());
       if (!all.some(([la, lo]) => la > s && la < n && lo > w && lo < e)) { fitTo(all); setStatus(`Imported ${nt} trail(s), ${np} waypoint(s) — moved the print area onto the track.`); return; }
+      const km = growToFit(all);
+      if (km) { setStatus(`Imported ${nt} trail(s) — map enlarged to ${km.toFixed(1)} km so the whole track fits (center unchanged).`); return; }
     }
     setStatus(`Imported ${nt} trail(s)${np ? `, ${np} waypoint(s) as POIs` : ''}.`);
   } catch (e) { console.error(e); setStatus('Import failed: ' + e.message, true); }

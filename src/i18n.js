@@ -90,6 +90,7 @@
     'Browser storage is full — preset not saved.': 'Browserspeicher voll – Vorlage nicht gespeichert.',
     'This preset has more than 4 colors — switch the mode to "More colors" to use it.': 'Diese Vorlage hat mehr als 4 Farben – stell den Modus auf „Mehr Farben", um sie zu verwenden.',
     'POI in the middle of the map (your address)': 'POI in der Kartenmitte (deine Adresse)', 'Middle POI shape': 'Form des Mitte-POI', 'Center': 'Mitte',
+    'Enlarge the map until this trail fits (center stays)': 'Karte vergrößern, bis dieser Weg ganz draufpasst (Mitte bleibt)', 'This trail already fits.': 'Dieser Weg passt schon ganz drauf.',
     // --- Full Spectrum mode ---
     'Full Spectrum pack (CMY + W/G)': 'Full-Spectrum-Set (CMY + W/G)', 'Filament pack': 'Filament-Set', 'T1 Cyan · T2 Magenta · T3 Yellow · T4 White / Gray': 'T1 Cyan · T2 Magenta · T3 Gelb · T4 Weiß / Grau',
     'Full Spectrum White Edition': 'Full Spectrum White Edition', 'Full Spectrum Gray Edition': 'Full Spectrum Gray Edition', 'Your colors (Full Spectrum)': 'Deine Farben (Full Spectrum)',
@@ -110,6 +111,8 @@
     [/^Added (\d+) hiking routes \(switched off\) — tick the ones you want printed\.$/, '$1 Wanderwege hinzugefügt (ausgeschaltet) – hake die an, die gedruckt werden sollen.'],
     [/^Added (\d+) POIs \((\d+) peaks, (\d+) huts\)\.$/, '$1 POIs hinzugefügt ($2 Gipfel, $3 Hütten).'], [/^Added POI "(.*)"\.$/, 'POI „$1" hinzugefügt.'],
     [/^Imported (\d+) trail\(s\), (\d+) waypoint\(s\) — moved the print area onto the track\.$/, '$1 Weg(e), $2 Wegpunkt(e) importiert – Druckbereich auf den Track verschoben.'],
+    [/^Imported (\d+) trail\(s\) — map enlarged to ([\d.]+) km so the whole track fits \(center unchanged\)\.$/, '$1 Weg(e) importiert – Karte auf $2 km vergrößert, damit der ganze Track draufpasst (Mitte bleibt).'],
+    [/^Trail added — map enlarged to ([\d.]+) km so it fits\.$/, 'Weg hinzugefügt – Karte auf $1 km vergrößert, damit er draufpasst.'], [/^Map enlarged to ([\d.]+) km\.$/, 'Karte auf $1 km vergrößert.'],
     [/^Imported (\d+) trail\(s\), (\d+) waypoint\(s\) as POIs\.$/, '$1 Weg(e) und $2 Wegpunkt(e) als POIs importiert.'], [/^Imported (\d+) trail\(s\)\.$/, '$1 Weg(e) importiert.'],
     [/^Created (\d+) filaments from the imagery — rename them to your spools and match the tools\.$/, '$1 Farben aus dem Satellitenbild erzeugt – benenne sie nach deinen Spulen und ordne die Tools zu.'],
     [/^3MF: (\d+) parts, ([\d.]+) M triangles, ([\d.]+) MB\. Load these filaments: /, '3MF: $1 Teile, $2 Mio. Dreiecke, $3 MB. Diese Filamente laden: '],
