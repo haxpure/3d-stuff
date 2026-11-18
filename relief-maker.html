@@ -432,6 +432,7 @@ window.FS = (() => {
     'Hue shifts satellite colors and Full Spectrum mixes. Contrast also moves the band borders: more area for the darkest and lightest color.': 'Der Farbton verschiebt Satellitenfarben und Full-Spectrum-Mischungen. Der Kontrast verschiebt auch die Stufengrenzen: mehr Fläche für die dunkelste und hellste Farbe.',
     "Shifts the wanted colors before they are matched to the pack's mixes.": 'Verschiebt die gewünschten Farben, bevor sie den Mischungen des Sets zugeordnet werden.',
     'Only with the Full Spectrum pack: fixed filaments cannot change their color.': 'Nur mit dem Full-Spectrum-Set: feste Filamente können ihre Farbe nicht ändern.',
+    'Real-looking: colors ordered by height like in the satellite image, with mixed transitions. The slicer mixes them.': 'Natürlicher Look: Farben nach Höhe geordnet wie im Satellitenbild, mit gemischten Übergängen. Der Slicer mischt sie.',
     // --- Full Spectrum mode ---
     'Full Spectrum pack (CMY + W/G)': 'Full-Spectrum-Set (CMY + W/G)', 'Filament pack': 'Filament-Set', 'T1 Cyan · T2 Magenta · T3 Yellow · T4 White / Gray': 'T1 Cyan · T2 Magenta · T3 Gelb · T4 Weiß / Grau',
     'Full Spectrum White Edition': 'Full Spectrum White Edition', 'Full Spectrum Gray Edition': 'Full Spectrum Gray Edition', 'Your colors (Full Spectrum)': 'Deine Farben (Full Spectrum)',
@@ -1962,20 +1963,44 @@ function suggestionList() {
   const bands = list => list.map((f, i) => ({ fil: f.id, upTo: i === list.length - 1 ? 99999 : Math.round(qs ? qs(cq((i + 1) / list.length)) : lo + (hi - lo) * cq((i + 1) / list.length)) }));
   const pal = (asg, b) => ({ fils: F.map(f => ({ ...f })), asg: { base: dark.id, core: dark.id, terrain: neutral.id, text: light === dark ? accent.id : light.id, water: (water || dark).id, trail: accent.id, poi: accent.id, rock: -1, ...asg }, next: 5, bands: b, slopeDeg: 35 });
   const hasW = !!water;
+  const G = T.filter(f => lum(f) > 45).length >= 2 ? T.filter(f => lum(f) > 45) : T;
   return [
     { title: 'Elevation bands', desc: `${T.length} colors from low to high${hasW ? ', water in ' + water.name : ''}. One color swap per band.`,
       set: c => { c.mode = 'four'; c.style4 = 'bands'; c.custom = pal({}, bands(T)); c.realContours = false; } },
     { title: 'Contour lines', desc: `${neutral.name} terrain with ${accent.name} contour lines.`,
       set: c => { c.mode = 'four'; c.style4 = 'contour'; c.custom = pal({ text: accent.id }, bands(T)); c.realContours = false; } },
-    { title: 'Smooth gradient', desc: S.fs ? 'Natural terrain colors mixed from the pack.' : 'Your colors with mixed transitions. The slicer mixes them.',
+    { title: 'Smooth gradient', desc: S.fs ? 'Natural terrain colors mixed from the pack.' : 'Real-looking: colors ordered by height like in the satellite image, with mixed transitions. The slicer mixes them.',
       set: c => { c.realContours = false; c.styleN = 'bands';
         if (S.fs) { c.mode = 'fs'; c.fsEd = S.ed; c.fs = palFrom(PRESETS.grad8, lo, hi); c.gSteps = 1; c.blendM = Math.round((hi - lo) / 10); }
-        else { c.mode = 'multi'; c.real = pal({}, bands(T)); c.gSteps = 3; c.blendM = Math.round((hi - lo) / Math.max(2, T.length) * 0.8); } } },
+        else { const nb = realBands(G, lo, hi, cq); c.mode = 'multi'; c.real = pal({}, nb); c.gSteps = 3; c.blendM = Math.round((hi - lo) / Math.max(2, G.length) * 0.7); } }, wantsImg: true },
     { title: 'Satellite colors', desc: S.fs ? 'Real colors from satellite imagery, mixed from the pack.' : 'Real colors from satellite imagery, using your colors and their mixes.',
       set: c => { c.realContours = false; c.styleN = 'real'; c.maxCols = 10;
         if (S.fs) { c.mode = 'fs'; c.fsEd = S.ed; c.fs = palFrom(PRESETS.satellite, lo, hi); }
         else { c.mode = 'multi'; c.real = pal({}, bands(T)); c.gSteps = 2; } }, needsImg: true },
   ];
+}
+// bands for a real-looking gradient: where does each color appear in the satellite image?
+// median height of the cells closest to each color -> order and borders; without imagery: dark low, light high
+function realBands(list, lo, hi, cq) {
+  const m = state.lastModel, out = list.map(f => ({ f, h: [] }));
+  if (state.img && m && m.Hs) {
+    const p = params(), kl = kmLon(p.lat), tmp = [0, 0, 0], labs = list.map(f => rgb2lab(...hex2rgb(f.color)));
+    const st = Math.max(1, Math.round(Math.sqrt(m.nx * m.ny / 15000)));
+    for (let r = 0; r < m.ny; r += st) { const lat = p.lat + (r * m.dy / m.scale - m.areaKmY / 2) / KM_LAT;
+      for (let c = 0; c < m.nx; c += st) {
+        const i = r * m.nx + c; if (m.W && m.W[i]) continue;
+        state.img.sample(lat, p.lon + (c * m.dx / m.scale - p.areaKm / 2) / kl, tmp);
+        const L = rgb2lab(tmp[0], tmp[1], tmp[2]); let best = 0, bd = Infinity;
+        labs.forEach((q, k) => { const d = (L[0] - q[0]) ** 2 + (L[1] - q[1]) ** 2 + (L[2] - q[2]) ** 2; if (d < bd) { bd = d; best = k; } });
+        out[best].h.push(m.Hs[i]);
+      } }
+  }
+  const lumOf = f => { const [r, g, b] = hex2rgb(f.color); return 0.299 * r + 0.587 * g + 0.114 * b; };
+  const med = a => { const s = a.slice().sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
+  const n = list.length, byLum = list.slice().sort((a, b) => lumOf(a) - lumOf(b));
+  out.forEach(o => { o.m = o.h.length >= 20 ? med(o.h) : lo + (hi - lo) * (byLum.indexOf(o.f) + 0.5) / n; });
+  out.sort((a, b) => a.m - b.m);
+  return out.map((o, i) => ({ fil: o.f.id, upTo: i === n - 1 ? 99999 : Math.round(lo + (hi - lo) * cq((((o.m + out[i + 1].m) / 2) - lo) / Math.max(1, hi - lo))) }));
 }
 // small top-down preview: plan colors on the terrain, shaded
 function drawThumb(cv, p, m, plan, rgbOf, A) {
@@ -2022,7 +2047,7 @@ function renderSuggestions() {
   });
   COL = orig;
   state.virt = savedVirt;
-  if (needImg.length) ensureImagery().then(() => queueSuggestions(true)).catch(() => {});
+  if ((needImg.length || list.some(o => o.wantsImg)) && !state.img) ensureImagery().then(() => { queueSuggestions(true); refreshPick(); }).catch(() => {});
 }
 function applySuggestion(k) {
   const o = suggestionList()[k]; if (!o) return;
