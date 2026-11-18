@@ -210,6 +210,8 @@
   <details open><summary>POI markers</summary>
     <div class="mini"><button type="button" id="osmPeaks">+ OSM peaks &amp; huts</button><button type="button" id="poiClear">Remove all</button></div>
     <div class="row"><label>Max. per type<small>highest first</small></label><input type="number" id="osmMax" value="6" min="1" max="40"></div>
+    <label class="check"><input type="checkbox" id="poiCenter" checked> POI in the middle of the map (your address)</label>
+    <div class="row" id="rowPoiCenter"><label>Middle POI shape</label><select id="poiCenterShape"><option value="star">★ Star</option><option value="tri">▲ Triangle (summit)</option><option value="dot">● Dot</option><option value="ring">◯ Ring</option><option value="square">■ Square (hut)</option><option value="diamond">◆ Diamond</option></select></div>
     <div id="poiList" class="list"></div>
     <div class="row"><label>Shape for new POIs</label><select id="poiShape"><option value="tri">▲ Triangle (summit)</option><option value="dot">● Dot</option><option value="ring">◯ Ring</option><option value="square">■ Square (hut)</option><option value="diamond">◆ Diamond</option><option value="star">★ Star</option></select></div>
     <div class="row"><label>Marker size (mm)</label><input type="number" id="poiSize" value="3.5" min="1.5" max="12" step="0.5"></div>
@@ -820,7 +822,7 @@ const nextFrame = () => new Promise(r => requestAnimationFrame(() => setTimeout(
 // ---------- params ----------
 const NUM = ['areaKm','printW','printD','bed','pitch','vex','base','floor','smooth','interval','firstContour','sheetLayers','layer','riverW','streamW','carve','recess','minLake','trailW','trailH','trailDepth','poiSize','poiH','osmMax','strip','textH','textScale'];
 const BOOL = ['wRivers','wStreams','wLakes','wRiverAreas','wFlat','wFlow','wWidthTag'];
-const SAVE = [...NUM, ...BOOL, 'addrLabel','coords','line1','line2','trailMode','poiShape','wptPoi','poiNames'];
+const SAVE = [...NUM, ...BOOL, 'addrLabel','coords','line1','line2','trailMode','poiShape','wptPoi','poiNames','poiCenter','poiCenterShape','addr'];
 let line2Auto = true;
 try { const s = JSON.parse(localStorage.getItem('reliefMaker') || 'null'); if (s) { for (const k of SAVE) if (k in s && $(k)) { const el = $(k); if (el.type === 'checkbox') el.checked = s[k]; else el.value = s[k]; } line2Auto = s.line2Auto !== false; } } catch (e) {}
 function save() { try { const s = { line2Auto }; for (const k of SAVE) { const el = $(k); s[k] = el.type === 'checkbox' ? el.checked : el.value; } localStorage.setItem('reliefMaker', JSON.stringify(s)); } catch (e) {} }
@@ -1253,8 +1255,10 @@ function applyPlace(pl, btn) {
   onLocationChange();
 }
 $('addrPoi').addEventListener('click', () => { if (lastPlace) { addPois([{ name: lastPlace.short, lat: lastPlace.lat, lon: lastPlace.lon }]); setStatus(`Added POI "${lastPlace.short}".`); } });
+let lastQuery = $('addr').value.trim() || null;   // restored address counts as already looked up
 async function addrSearch() {
   const q = $('addr').value.trim(); if (!q) return;
+  lastQuery = q;
   const ll = parseCoords(q);
   if (ll && /^[\s\d.,°'′"″NSEWnsew+-]+$/.test(q)) { $('coords').value = `${ll[0].toFixed(5)}, ${ll[1].toFixed(5)}`; $('addrResults').innerHTML = ''; onLocationChange(); return; }
   $('addrBtn').disabled = true; setStatus('Looking up address…');
@@ -1523,7 +1527,16 @@ let poiLabels = []; const tmpV = new THREE.Vector3();
 })();
 
 let state = { dem: null, water: null, img: null, fitted: false, lastModel: null, virt: [] };
-const featsFor = () => ({ water: state.water, trails: FEAT.trails.filter(t => t.on), pois: FEAT.pois.filter(q => q.on) });
+// POI that always sits exactly in the middle of the map (= the searched address)
+function centerPoi() {
+  if (!$('poiCenter').checked) return [];
+  const p = params();
+  return [{ lat: p.lat, lon: p.lon, shape: $('poiCenterShape').value, name: (lastPlace && lastPlace.short) || $('addr').value.trim() || 'Center' }];
+}
+const featsFor = () => ({ water: state.water, trails: FEAT.trails.filter(t => t.on), pois: [...FEAT.pois.filter(q => q.on), ...centerPoi()] });
+$('poiCenter').addEventListener('change', () => { $('rowPoiCenter').classList.toggle('hide', !$('poiCenter').checked); schedule(); });
+$('poiCenterShape').addEventListener('change', schedule);
+$('rowPoiCenter').classList.toggle('hide', !$('poiCenter').checked);
 function colorCfg(p, m) {
   const A = PAL().asg, Cu = PAL(), im = imode();
   const cfg = { mode: im, terrainFil: +A.terrain, accentFil: +A.text, coreFil: +A.core, bands: Cu.bands.map(b => ({ fil: +b.fil, upTo: +b.upTo })),
@@ -1658,7 +1671,7 @@ async function loadArea() {
 }
 let locTimer;
 function onLocationChange() { if ($('coords').value.trim() && !parseCoords($('coords').value)) { $('addr').value = $('coords').value; $('coords').value = ''; addrSearch(); return; } updateLine2(); updateMap(true); save(); clearTimeout(locTimer); locTimer = setTimeout(loadArea, 700); }
-$('fetchBtn').addEventListener('click', loadArea);
+$('fetchBtn').addEventListener('click', () => { const q = $('addr').value.trim(); if (q && q !== lastQuery) addrSearch(); else loadArea(); });
 for (const id of ['coords', 'areaKm', 'printW', 'printD']) $(id).addEventListener('change', onLocationChange);
 let pvTimer;
 function schedule() { save(); clearTimeout(pvTimer); pvTimer = setTimeout(() => rebuildPreview().catch(e => { console.error(e); setStatus(e.message, true); }), 150); }
