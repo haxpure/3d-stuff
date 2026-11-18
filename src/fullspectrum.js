@@ -43,5 +43,15 @@ window.FS = (() => {
   }
   // tool numbers: pure pack filaments T1–T4, every distinct mix gets the next number from T5
   function toolSet() { const m = new Map(); let next = 5; return s => { if (s.single >= 0) return s.single + 1; if (!m.has(s.recipe)) m.set(s.recipe, next++); return m.get(s.recipe); }; }
-  return { ED, gamut, snap, toolSet };
+  // hue rotation (degrees, luminance-preserving) and contrast (%) for target colors
+  function tuneRGB(c, hue, con) {
+    let [r, g, b] = c;
+    if (hue) { const a = hue * Math.PI / 180, C = Math.cos(a), S = Math.sin(a);
+      const m = [.213 + C * .787 - S * .213, .715 - C * .715 - S * .715, .072 - C * .072 + S * .928, .213 - C * .213 + S * .143, .715 + C * .285 + S * .140, .072 - C * .072 - S * .283, .213 - C * .213 - S * .787, .715 - C * .715 + S * .715, .072 + C * .928 + S * .072];
+      [r, g, b] = [m[0] * r + m[1] * g + m[2] * b, m[3] * r + m[4] * g + m[5] * b, m[6] * r + m[7] * g + m[8] * b]; }
+    const k = (con || 100) / 100;
+    return [r, g, b].map(v => Math.max(0, Math.min(255, Math.round((v - 128) * k + 128))));
+  }
+  const tune = (hex, hue, con) => (!hue && (con || 100) === 100) ? hex : toHex(tuneRGB(hx(hex), hue, con));
+  return { ED, gamut, snap, toolSet, tune, tuneRGB };
 })();

@@ -131,6 +131,11 @@
     <label class="check"><input type="checkbox" id="sFS"> I have the Full Spectrum pack (CMY + White/Gray)</label>
     <div class="row hide" id="sEdRow"><label>Pack</label><select id="sEd"><option value="white">White Edition</option><option value="gray">Gray Edition</option></select></div>
     <h3>Suggestions</h3>
+    <div id="sTune">
+      <div class="row"><label>Hue</label><div class="rng"><input type="range" id="sHue" min="-180" max="180" step="5" value="0"><output></output></div></div>
+      <div class="row"><label>Contrast</label><div class="rng"><input type="range" id="sCon" min="50" max="200" step="5" value="100"><output></output></div></div>
+      <div class="hint" id="sTuneHint">Hue shifts satellite colors and Full Spectrum mixes. Contrast also moves the band borders: more area for the darkest and lightest color.</div>
+    </div>
     <div class="hint" id="sHint">Load terrain to see the suggestions.</div>
     <div class="opts" id="sOpts"></div>
   </div>
@@ -311,7 +316,17 @@ window.FS = (() => {
   }
   // tool numbers: pure pack filaments T1–T4, every distinct mix gets the next number from T5
   function toolSet() { const m = new Map(); let next = 5; return s => { if (s.single >= 0) return s.single + 1; if (!m.has(s.recipe)) m.set(s.recipe, next++); return m.get(s.recipe); }; }
-  return { ED, gamut, snap, toolSet };
+  // hue rotation (degrees, luminance-preserving) and contrast (%) for target colors
+  function tuneRGB(c, hue, con) {
+    let [r, g, b] = c;
+    if (hue) { const a = hue * Math.PI / 180, C = Math.cos(a), S = Math.sin(a);
+      const m = [.213 + C * .787 - S * .213, .715 - C * .715 - S * .715, .072 - C * .072 + S * .928, .213 - C * .213 + S * .143, .715 + C * .285 + S * .140, .072 - C * .072 - S * .283, .213 - C * .213 - S * .787, .715 - C * .715 + S * .715, .072 + C * .928 + S * .072];
+      [r, g, b] = [m[0] * r + m[1] * g + m[2] * b, m[3] * r + m[4] * g + m[5] * b, m[6] * r + m[7] * g + m[8] * b]; }
+    const k = (con || 100) / 100;
+    return [r, g, b].map(v => Math.max(0, Math.min(255, Math.round((v - 128) * k + 128))));
+  }
+  const tune = (hex, hue, con) => (!hue && (con || 100) === 100) ? hex : toHex(tuneRGB(hx(hex), hue, con));
+  return { ED, gamut, snap, toolSet, tune, tuneRGB };
 })();
 // ===== DE / EN language switch (shared by all tools) =====
 // Translates the page's English UI text in place; new and changed text (status, info box, lists) is caught by a MutationObserver.
@@ -413,6 +428,10 @@ window.FS = (() => {
     'Natural terrain colors mixed from the pack.': 'Natürliche Geländefarben, aus dem Set gemischt.', 'Your colors with mixed transitions. The slicer mixes them.': 'Deine Farben mit gemischten Übergängen. Der Slicer mischt sie.',
     'Real colors from satellite imagery, mixed from the pack.': 'Echte Farben aus dem Satellitenbild, aus dem Set gemischt.', 'Real colors from satellite imagery, using your colors and their mixes.': 'Echte Farben aus dem Satellitenbild, aus deinen Farben und ihren Mischungen.',
     'Light blue': 'Hellblau',
+    'Hue': 'Farbton', 'Contrast': 'Kontrast',
+    'Hue shifts satellite colors and Full Spectrum mixes. Contrast also moves the band borders: more area for the darkest and lightest color.': 'Der Farbton verschiebt Satellitenfarben und Full-Spectrum-Mischungen. Der Kontrast verschiebt auch die Stufengrenzen: mehr Fläche für die dunkelste und hellste Farbe.',
+    "Shifts the wanted colors before they are matched to the pack's mixes.": 'Verschiebt die gewünschten Farben, bevor sie den Mischungen des Sets zugeordnet werden.',
+    'Only with the Full Spectrum pack: fixed filaments cannot change their color.': 'Nur mit dem Full-Spectrum-Set: feste Filamente können ihre Farbe nicht ändern.',
     // --- Full Spectrum mode ---
     'Full Spectrum pack (CMY + W/G)': 'Full-Spectrum-Set (CMY + W/G)', 'Filament pack': 'Filament-Set', 'T1 Cyan · T2 Magenta · T3 Yellow · T4 White / Gray': 'T1 Cyan · T2 Magenta · T3 Gelb · T4 Weiß / Grau',
     'Full Spectrum White Edition': 'Full Spectrum White Edition', 'Full Spectrum Gray Edition': 'Full Spectrum Gray Edition', 'Your colors (Full Spectrum)': 'Deine Farben (Full Spectrum)',
@@ -972,7 +991,7 @@ function imageryCells(p, m, sample) {
   }
   return out;
 }
-function adjustColors(px, autoLevels, sat) {
+function adjustColors(px, autoLevels, sat, hue = 0, con = 100) {
   const out = new Uint8Array(px.length), n = px.length / 3;
   const lo = [0, 0, 0], hi = [255, 255, 255];
   if (autoLevels) for (let ch = 0; ch < 3; ch++) {
@@ -984,7 +1003,8 @@ function adjustColors(px, autoLevels, sat) {
   for (let i = 0; i < n; i++) {
     const v = [0, 1, 2].map(ch => (px[i * 3 + ch] - lo[ch]) * 255 / (hi[ch] - lo[ch]));
     const l = 0.299 * v[0] + 0.587 * v[1] + 0.114 * v[2];
-    for (let ch = 0; ch < 3; ch++) out[i * 3 + ch] = Math.max(0, Math.min(255, Math.round(l + (v[ch] - l) * sat)));
+    const q = [0, 1, 2].map(ch => l + (v[ch] - l) * sat), t = (hue || con !== 100) ? FS.tuneRGB(q, hue, con) : q;
+    for (let ch = 0; ch < 3; ch++) out[i * 3 + ch] = Math.max(0, Math.min(255, Math.round(t[ch])));
   }
   return out;
 }
@@ -1133,7 +1153,7 @@ if (line2Auto || !$('line2').value) { line2Auto = true; updateLine2(); }
 
 for (const el of document.querySelectorAll('.rng')) {
   const r = el.querySelector('input'), o = el.querySelector('output');
-  const f = () => o.textContent = (+r.value).toFixed(r.step < 1 ? (r.step < 0.1 ? 2 : 1) : 0) + (r.id === 'vex' ? '×' : '');
+  const f = () => o.textContent = (+r.value).toFixed(r.step < 1 ? (r.step < 0.1 ? 2 : 1) : 0) + (r.id === 'vex' ? '×' : r.id === 'sHue' ? '°' : r.id === 'sCon' ? '%' : '');
   r._fmt = f; r.addEventListener('input', f); f();
 }
 function trailRows() { const inl = $('trailMode').value === 'inlay'; $('rowTrailH').classList.toggle('hide', inl); $('rowTrailD').classList.toggle('hide', !inl); }
@@ -1178,10 +1198,11 @@ const STYLES = { four: [['bands', 'Elevation bands'], ['contour', 'Contour lines
 STYLES.fs = STYLES.multi;
 // Full Spectrum: every color is snapped to the nearest mix of the pack; mixes get tool numbers from T5
 let fsTool = FS.toolSet();
-function fsReset() { fsTool = FS.toolSet(); for (const f of [...PAL().fils, ...((typeof state !== 'undefined' && state.virt) || [])]) fsTool(FS.snap(f.color, COL.fsEd)); }
-function fsInfo(f) { const sn = FS.snap(f.color, COL.fsEd); return { ...f, want: f.color, color: sn.hex, tool: fsTool(sn), recipe: sn.recipe, name: `${f.name} [${sn.recipe}]` }; }
+const fsSnap = c => FS.snap(FS.tune(c, COL.simple ? COL.simple.hue : 0, COL.simple ? COL.simple.contrast : 100), COL.fsEd);
+function fsReset() { fsTool = FS.toolSet(); for (const f of [...PAL().fils, ...((typeof state !== 'undefined' && state.virt) || [])]) fsTool(fsSnap(f.color)); }
+function fsInfo(f) { const sn = fsSnap(f.color); return { ...f, want: f.color, color: sn.hex, tool: fsTool(sn), recipe: sn.recipe, name: `${f.name} [${sn.recipe}]` }; }
 const filById = id => { const f = PAL().fils.find(f => f.id === +id) || (state.virt || []).find(f => f.id === +id); return f && COL.mode === 'fs' ? fsInfo(f) : f; };
-const filLabel = f => COL.mode === 'fs' ? `${f.name} (${FS.snap(f.color, COL.fsEd).recipe})` : `${f.name} (T${f.tool})`;
+const filLabel = f => COL.mode === 'fs' ? `${f.name} (${fsSnap(f.color).recipe})` : `${f.name} (T${f.tool})`;
 const filColor = id => (filById(id) || { color: '#888888' }).color;
 function saveCOL() { try { localStorage.setItem('reliefMakerColors3', JSON.stringify(COL)); } catch (e) {} }
 function fixRefs() {
@@ -1345,7 +1366,7 @@ $('kBtn').addEventListener('click', async () => {
   try {
     await ensureImagery(); const p = params(), R = PAL();
     const m = computeModel(p, state.dem, null, Math.max(p.pitch, Math.sqrt(p.printW * p.printD / 60000)));
-    const px = adjustColors(imageryCells(p, m, state.img.sample), COL.autoLevels, COL.sat);
+    const px = adjustColors(imageryCells(p, m, state.img.sample), COL.autoLevels, COL.sat, COL.simple.hue, COL.simple.contrast);
     const cen = kmeans(px, Math.max(2, Math.min(12, COL.kN)));
     const keep = new Set(Object.values(R.asg).map(Number));
     R.fils = R.fils.filter(f => !f.real || keep.has(f.id));
@@ -1662,8 +1683,8 @@ const lerpLin = (h1, h2, t) => { const a = hex2rgb(h1), b = hex2rgb(h2), L = v =
 // the most used ones (max. colors) are kept, every mix becomes a placeholder filament
 function realCells(p, m) {
   const pal = PAL(), base = pal.fils.filter(f => f.real), use = base.length ? base : pal.fils;
-  const key = [state.img.key, m.nx, m.ny, COL.autoLevels, COL.sat].join('|');
-  if (!realCache || realCache.key !== key) realCache = { key, px: adjustColors(imageryCells(p, m, state.img.sample), COL.autoLevels, COL.sat) };
+  const key = [state.img.key, m.nx, m.ny, COL.autoLevels, COL.sat, COL.simple.hue, COL.simple.contrast].join('|');
+  if (!realCache || realCache.key !== key) realCache = { key, px: adjustColors(imageryCells(p, m, state.img.sample), COL.autoLevels, COL.sat, COL.simple.hue, COL.simple.contrast) };
   const cw = m.nx - 1, ch = m.ny - 1;
   let cand = use.map(f => ({ id: f.id, color: f.color }));
   if (COL.mode === 'fs') cand = FS.gamut(COL.fsEd).map((g, i) => ({ id: 7000 + i, name: 'Mix ' + g.recipe, color: g.hex, mix: true }));
@@ -1895,10 +1916,12 @@ const asgIds = () => { const A = PAL().asg; return { base: +A.base, water: +A.wa
 
 // ===== simple mode: your filaments in, 4 ready-made looks out =====
 COL.simple ??= { fils: [['Yellow', '#f6c21c'], ['Gray', '#a3a6aa'], ['Light blue', '#5fc3d6'], ['Black', '#17181b']], fs: false, ed: 'white', pick: -1 };
+COL.simple.hue ??= 0; COL.simple.contrast ??= 100;
 const S_FS = { white: [['Cyan', '#00C3FF'], ['Magenta', '#F54399'], ['Yellow', '#FAE727'], ['White', '#F2F2EF']], gray: [['Cyan', '#08ABFB'], ['Magenta', '#D93B90'], ['Yellow', '#F9ED3D'], ['Gray', '#A9A6A1']] };
 let EXPERT = false; try { EXPERT = localStorage.getItem('reliefMakerExpert') === '1'; } catch (e) {}
 function applyExpert() {
   $('expert').checked = EXPERT; $('simple').classList.toggle('hide', EXPERT);
+  if (EXPERT) $('rowRealContours').after($('sTune')); else $('sOpts').before($('sTune'));
   for (const d of document.querySelectorAll('aside details')) d.classList.toggle('hide', !EXPERT && d.id !== 'dLabel');
   if (!EXPERT) queueSuggestions(true);
 }
@@ -1914,11 +1937,13 @@ function renderSimpleFils() {
     box.append(mk('div', { className: 'sfil' }, col, nm, mk('span', { className: 't', textContent: 'T' + (i + 1) })));
   });
   $('sFS').checked = S.fs; $('sEd').value = S.ed; $('sEdRow').classList.toggle('hide', !S.fs);
+  $('sHue').value = S.hue; $('sCon').value = S.contrast; $('sHue')._fmt(); $('sCon')._fmt();
 }
+for (const [id, k] of [['sHue', 'hue'], ['sCon', 'contrast']]) $(id).addEventListener('input', () => { COL.simple[k] = +$(id).value; realCache = null; saveCOL(); queueSuggestions(true); if (EXPERT) colorsChanged(false); else refreshPick(); });
 $('sFS').addEventListener('change', () => { COL.simple.fs = $('sFS').checked; saveCOL(); renderSimpleFils(); queueSuggestions(true); refreshPick(); });
 $('sEd').addEventListener('change', () => { COL.simple.ed = $('sEd').value; saveCOL(); renderSimpleFils(); queueSuggestions(true); refreshPick(); });
 // keep the chosen look in sync with the filaments
-let pickTimer; function refreshPick() { clearTimeout(pickTimer); pickTimer = setTimeout(() => { if (!EXPERT && COL.simple.pick >= 0) applySuggestion(COL.simple.pick); }, 300); }
+let pickTimer; function refreshPick() { clearTimeout(pickTimer); pickTimer = setTimeout(() => { if (!EXPERT && state.dem) applySuggestion(Math.max(0, COL.simple.pick)); }, 250); }
 // the 4 suggestions: each one is a full color setup (mode, palette, assignments) applied to COL
 function suggestionList() {
   const S = COL.simple, src = S.fs ? S_FS[S.ed] : S.fils, m = state.lastModel, lo = m ? m.hmin : 350, hi = m ? m.hmax : 1450;
@@ -1932,7 +1957,8 @@ function suggestionList() {
   const accent = F.filter(f => f !== neutral && f !== water && f !== dark).sort((a, b) => satu(b) - satu(a))[0] || light;
   // band edges at elevation quantiles: every color covers about the same area of the map
   let qs = null; if (m && m.Hs) { const st = Math.max(1, Math.floor(m.Hs.length / 20000)), smp = []; for (let i = 0; i < m.Hs.length; i += st) smp.push(m.Hs[i]); smp.sort((a, b) => a - b); qs = q => smp[Math.min(smp.length - 1, Math.floor(q * smp.length))]; }
-  const bands = list => list.map((f, i) => ({ fil: f.id, upTo: i === list.length - 1 ? 99999 : Math.round(qs ? qs((i + 1) / list.length) : lo + (hi - lo) * (i + 1) / list.length) }));
+  const cq = q => Math.min(0.97, Math.max(0.03, 0.5 + (q - 0.5) * 100 / (S.contrast || 100)));
+  const bands = list => list.map((f, i) => ({ fil: f.id, upTo: i === list.length - 1 ? 99999 : Math.round(qs ? qs(cq((i + 1) / list.length)) : lo + (hi - lo) * cq((i + 1) / list.length)) }));
   const pal = (asg, b) => ({ fils: F.map(f => ({ ...f })), asg: { base: dark.id, core: dark.id, terrain: neutral.id, text: light === dark ? accent.id : light.id, water: (water || dark).id, trail: accent.id, poi: accent.id, rock: -1, ...asg }, next: 5, bands: b, slopeDeg: 35 });
   const hasW = !!water;
   return [

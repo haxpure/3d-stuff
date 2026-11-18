@@ -98,6 +98,10 @@
     'Natural terrain colors mixed from the pack.': 'Natürliche Geländefarben, aus dem Set gemischt.', 'Your colors with mixed transitions. The slicer mixes them.': 'Deine Farben mit gemischten Übergängen. Der Slicer mischt sie.',
     'Real colors from satellite imagery, mixed from the pack.': 'Echte Farben aus dem Satellitenbild, aus dem Set gemischt.', 'Real colors from satellite imagery, using your colors and their mixes.': 'Echte Farben aus dem Satellitenbild, aus deinen Farben und ihren Mischungen.',
     'Light blue': 'Hellblau',
+    'Hue': 'Farbton', 'Contrast': 'Kontrast',
+    'Hue shifts satellite colors and Full Spectrum mixes. Contrast also moves the band borders: more area for the darkest and lightest color.': 'Der Farbton verschiebt Satellitenfarben und Full-Spectrum-Mischungen. Der Kontrast verschiebt auch die Stufengrenzen: mehr Fläche für die dunkelste und hellste Farbe.',
+    "Shifts the wanted colors before they are matched to the pack's mixes.": 'Verschiebt die gewünschten Farben, bevor sie den Mischungen des Sets zugeordnet werden.',
+    'Only with the Full Spectrum pack: fixed filaments cannot change their color.': 'Nur mit dem Full-Spectrum-Set: feste Filamente können ihre Farbe nicht ändern.',
     // --- Full Spectrum mode ---
     'Full Spectrum pack (CMY + W/G)': 'Full-Spectrum-Set (CMY + W/G)', 'Filament pack': 'Filament-Set', 'T1 Cyan · T2 Magenta · T3 Yellow · T4 White / Gray': 'T1 Cyan · T2 Magenta · T3 Gelb · T4 Weiß / Grau',
     'Full Spectrum White Edition': 'Full Spectrum White Edition', 'Full Spectrum Gray Edition': 'Full Spectrum Gray Edition', 'Your colors (Full Spectrum)': 'Deine Farben (Full Spectrum)',
