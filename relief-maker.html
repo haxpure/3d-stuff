@@ -1931,8 +1931,9 @@ function renderSimpleFils() {
   const list = S.fs ? S_FS[S.ed] : S.fils;
   list.forEach((f, i) => {
     const col = mk('input', { type: 'color', value: f[1], disabled: S.fs }), nm = mk('input', { type: 'text', value: f[0], disabled: S.fs, placeholder: 'Filament name' });
-    col.addEventListener('input', () => { S.fils[i][1] = col.value; saveCOL(); queueSuggestions(true); refreshPick(); });
-    nm.addEventListener('input', () => { S.fils[i][0] = nm.value; saveCOL(); });
+    const setCol = () => { if (COL.simple.fs) return; COL.simple.fils[i][1] = col.value; saveCOL(); queueSuggestions(true); refreshPick(); };
+    col.addEventListener('input', setCol); col.addEventListener('change', setCol);
+    nm.addEventListener('input', () => { COL.simple.fils[i][0] = nm.value; saveCOL(); });
     nm.addEventListener('change', () => { queueSuggestions(true); refreshPick(); });
     box.append(mk('div', { className: 'sfil' }, col, nm, mk('span', { className: 't', textContent: 'T' + (i + 1) })));
   });
@@ -2004,7 +2005,7 @@ function renderSuggestions() {
   if (key === sugKey) return; sugKey = key;
   $('sHint').classList.add('hide');
   const m = computeModel(p, state.dem, featsFor(), Math.max(p.printW / 110, p.pitch));
-  const saved = JSON.stringify(COL), savedVirt = state.virt, list = suggestionList(), needImg = [];
+  const orig = COL, savedVirt = state.virt, list = suggestionList(), needImg = [];
   box.innerHTML = '';
   list.forEach((o, k) => {
     const cv = mk('canvas'), btn = mk('button', { type: 'button', className: 'opt' + (COL.simple.pick === k ? ' on' : '') }, cv, mk('b', { textContent: o.title }), mk('small', { textContent: o.desc }));
@@ -2012,13 +2013,14 @@ function renderSuggestions() {
     box.append(btn);
     if (o.needsImg && !state.img) { needImg.push(cv); const ctx = cv.getContext('2d'); cv.width = 160; cv.height = 180; ctx.fillStyle = '#8b919c'; ctx.font = '12px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('Satellite image…', 80, 92); return; }
     try {
-      o.set(COL); fixRefs(); ensureBands();
+      COL = JSON.parse(JSON.stringify(orig)); o.set(COL); fixRefs(); ensureBands();
       const plan = makePlan(p, m, colorCfg(p, m));
       const rgbOf = id => { const f = filById(id); return f ? hex2rgb(f.color) : [136, 136, 136]; };
       drawThumb(cv, p, m, plan, rgbOf, PAL().asg);
     } catch (e) { console.warn('suggestion', k, e); }
-    COL = JSON.parse(saved);
+    COL = orig;
   });
+  COL = orig;
   state.virt = savedVirt;
   if (needImg.length) ensureImagery().then(() => queueSuggestions(true)).catch(() => {});
 }
