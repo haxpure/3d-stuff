@@ -226,7 +226,7 @@
     <div class="row"><label>Smallest lake (mm²)<small>on the print; hides tiny ponds</small></label><input type="number" id="minLake" value="3" min="0" max="200" step="1"></div>
   </details>
 
-  <details open><summary>Trails</summary>
+  <details open id="dTrails"><summary>Trails</summary>
     <div class="mini"><button type="button" id="impBtn">Import GPX / KML / GeoJSON</button><button type="button" id="osmRoutes">OSM hiking routes</button></div>
     <input type="file" id="impFile" accept=".gpx,.kml,.kmz,.geojson,.json" multiple class="hide">
     <label class="check"><input type="checkbox" id="wptPoi" checked> Import waypoints as POIs</label>
@@ -238,7 +238,7 @@
     <div class="row" id="rowTrailD"><label>Inlay depth (mm)</label><input type="number" id="trailDepth" value="0.6" min="0.2" max="2" step="0.1"></div>
   </details>
 
-  <details open><summary>POI markers</summary>
+  <details open id="dPoi"><summary>POI markers</summary>
     <div class="mini"><button type="button" id="osmPeaks">+ OSM peaks &amp; huts</button><button type="button" id="poiClear">Remove all</button></div>
     <div class="row"><label>Max. per type<small>highest first</small></label><input type="number" id="osmMax" value="6" min="1" max="40"></div>
     <label class="check"><input type="checkbox" id="poiCenter" checked> POI in the middle of the map (your address)</label>
@@ -436,6 +436,7 @@ window.FS = (() => {
     'Only with the Full Spectrum pack: fixed filaments cannot change their color.': 'Nur mit dem Full-Spectrum-Set: feste Filamente können ihre Farbe nicht ändern.',
     'Real-looking: colors ordered by height like in the satellite image, with mixed transitions. The slicer mixes them.': 'Natürlicher Look: Farben nach Höhe geordnet wie im Satellitenbild, mit gemischten Übergängen. Der Slicer mischt sie.',
     'Font color': 'Schriftfarbe', 'Automatic': 'Automatisch', 'Custom color': 'Eigene Farbe', 'Custom font color': 'Eigene Schriftfarbe', 'own filament slot in the 3MF': 'eigener Filament-Platz im 3MF',
+    'Remove the middle POI': 'Mitte-POI entfernen', 'middle of the map': 'Kartenmitte',
     // --- Full Spectrum mode ---
     'Full Spectrum pack (CMY + W/G)': 'Full-Spectrum-Set (CMY + W/G)', 'Filament pack': 'Filament-Set', 'T1 Cyan · T2 Magenta · T3 Yellow · T4 White / Gray': 'T1 Cyan · T2 Magenta · T3 Gelb · T4 Weiß / Grau',
     'Full Spectrum White Edition': 'Full Spectrum White Edition', 'Full Spectrum Gray Edition': 'Full Spectrum Gray Edition', 'Your colors (Full Spectrum)': 'Deine Farben (Full Spectrum)',
@@ -1442,7 +1443,12 @@ function renderFeatLists() {
     tl.append(mk('div', { className: 'item' }, cb, nm, mk('span', { className: 'meta', textContent: trailKm(t).toFixed(1) + ' km' }), fit, del));
   }
   const pl = $('poiList'); pl.innerHTML = '';
-  if (!FEAT.pois.length) pl.append(mk('div', { className: 'empty', textContent: 'No POIs yet.' }));
+  if ($('poiCenter').checked) {
+    const del = mk('button', { type: 'button', className: 'ib x', textContent: '×', title: 'Remove the middle POI' });
+    del.addEventListener('click', () => { $('poiCenter').checked = false; $('rowPoiCenter').classList.add('hide'); save(); renderFeatLists(); schedule(); });
+    pl.append(mk('div', { className: 'item' }, mk('span', { className: 'meta', textContent: '★', style: 'color:var(--acc)' }), mk('span', { textContent: (lastPlace && lastPlace.short) || $('addr').value.trim() || 'Center', style: 'flex:1' }), mk('span', { className: 'meta', textContent: 'middle of the map' }), del));
+  }
+  if (!FEAT.pois.length && !$('poiCenter').checked) pl.append(mk('div', { className: 'empty', textContent: 'No POIs yet.' }));
   for (const q of FEAT.pois) {
     const cb = mk('input', { type: 'checkbox', checked: q.on }); cb.addEventListener('change', () => { q.on = cb.checked; featsChanged(false); });
     const nm = mk('input', { type: 'text', value: q.name }); nm.addEventListener('input', () => { q.name = nm.value; saveFeat(); drawFeatures(); schedule(); });
@@ -1458,7 +1464,7 @@ function addPois(list, shape) {
   }
   featsChanged();
 }
-$('poiClear').addEventListener('click', () => { if (FEAT.pois.length && confirm(`Remove all ${FEAT.pois.length} POIs?`)) { FEAT.pois = []; featsChanged(); } });
+$('poiClear').addEventListener('click', () => { const n = FEAT.pois.length + ($('poiCenter').checked ? 1 : 0); if (n && confirm(`Remove all ${n} POIs?`)) { FEAT.pois = []; $('poiCenter').checked = false; $('rowPoiCenter').classList.add('hide'); save(); featsChanged(); } });
 function fitTo(pts) {
   let s = 90, n = -90, w = 180, e = -180;
   for (const [la, lo] of pts) { s = Math.min(s, la); n = Math.max(n, la); w = Math.min(w, lo); e = Math.max(e, lo); }
@@ -1574,7 +1580,7 @@ async function geocode(q) {
   return out;
 }
 function applyPlace(pl, btn) {
-  lastPlace = pl; $('addrPoi').classList.remove('hide');
+  lastPlace = pl; $('addrPoi').classList.remove('hide'); renderFeatLists();
   $('coords').value = `${pl.lat.toFixed(5)}, ${pl.lon.toFixed(5)}`;
   if ($('addrLabel').checked) $('line1').value = pl.short.toUpperCase();
   for (const b of $('addrResults').children) b.classList.toggle('on', b === btn);
@@ -1880,7 +1886,7 @@ function centerPoi() {
   return [{ lat: p.lat, lon: p.lon, shape: $('poiCenterShape').value, name: (lastPlace && lastPlace.short) || $('addr').value.trim() || 'Center' }];
 }
 const featsFor = () => ({ water: state.water, trails: FEAT.trails.filter(t => t.on), pois: [...FEAT.pois.filter(q => q.on), ...centerPoi()] });
-$('poiCenter').addEventListener('change', () => { $('rowPoiCenter').classList.toggle('hide', !$('poiCenter').checked); schedule(); });
+$('poiCenter').addEventListener('change', () => { $('rowPoiCenter').classList.toggle('hide', !$('poiCenter').checked); save(); renderFeatLists(); schedule(); });
 $('poiCenterShape').addEventListener('change', schedule);
 $('rowPoiCenter').classList.toggle('hide', !$('poiCenter').checked);
 function colorCfg(p, m) {
@@ -1950,7 +1956,7 @@ let EXPERT = false; try { EXPERT = localStorage.getItem('reliefMakerExpert') ===
 function applyExpert() {
   $('expert').checked = EXPERT; $('simple').classList.toggle('hide', EXPERT);
   if (EXPERT) $('rowRealContours').after($('sTune')); else $('sOpts').before($('sTune'));
-  for (const d of document.querySelectorAll('aside details')) d.classList.toggle('hide', !EXPERT && d.id !== 'dLabel');
+  for (const d of document.querySelectorAll('aside details')) d.classList.toggle('hide', !EXPERT && !['dLabel', 'dPoi', 'dTrails'].includes(d.id));
   if (!EXPERT) queueSuggestions(true);
 }
 $('expert').addEventListener('change', () => { EXPERT = $('expert').checked; try { localStorage.setItem('reliefMakerExpert', EXPERT ? '1' : '0'); } catch (e) {} applyExpert(); });
