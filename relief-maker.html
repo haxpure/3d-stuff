@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Relief Maker – 4-color terrain 3MF</title>
+<title>Relief Maker V2 – multi-color terrain 3MF</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
@@ -19,19 +19,21 @@
   :root { --bg:#111317; --panel:#181b21; --line:#262a33; --text:#e8eaee; --mute:#8b919c; --acc:#f6c21c; }
   * { box-sizing: border-box; }
   html,body { margin:0; height:100%; background:var(--bg); color:var(--text); font:13px/1.4 Inter, system-ui, sans-serif; }
-  #app { display:grid; grid-template-columns: 380px 1fr; height:100vh; }
+  #app { display:grid; grid-template-columns: 400px 1fr; height:100vh; }
   aside { background:var(--panel); border-right:1px solid var(--line); overflow-y:auto; padding:14px 16px 40px; }
   h1 { font:700 18px Poppins, sans-serif; margin:0 0 2px; letter-spacing:.2px; }
   h1 span { color:var(--acc); }
+  h3 { font:600 11px Inter, sans-serif; color:var(--mute); text-transform:uppercase; letter-spacing:.7px; margin:12px 0 4px; }
   .sub { color:var(--mute); margin-bottom:12px; }
-  #map { height:230px; border-radius:8px; border:1px solid var(--line); margin-bottom:8px; }
+  #map { height:240px; border-radius:8px; border:1px solid var(--line); margin-bottom:6px; }
   details { border-top:1px solid var(--line); padding:8px 0; }
   summary { cursor:pointer; font-weight:600; padding:4px 0; list-style:none; display:flex; justify-content:space-between; }
   summary::after { content:'+'; color:var(--mute); } details[open] summary::after { content:'–'; }
-  .row { display:grid; grid-template-columns: 1fr 120px; align-items:center; gap:8px; margin:6px 0; }
+  .row { display:grid; grid-template-columns: 1fr 130px; align-items:center; gap:8px; margin:6px 0; }
   .row.full { grid-template-columns: 1fr; }
   .row label { color:#c7cbd3; }
-  .row small { color:var(--mute); display:block; font-size:11px; }
+  .row small, .hint { color:var(--mute); display:block; font-size:11px; }
+  .hint { margin:3px 0 6px; }
   input[type=text], input[type=number], select { width:100%; background:#0f1115; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:6px 8px; font:inherit; }
   input[type=range] { width:100%; accent-color: var(--acc); }
   .rng { display:grid; grid-template-columns: 1fr 52px; gap:6px; align-items:center; }
@@ -41,37 +43,65 @@
   button.sec { background:#2a2f39; color:var(--text); }
   button:disabled { opacity:.5; cursor:default; }
   .btns { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; }
-  .fil { display:grid; grid-template-columns: 34px 1fr 70px; gap:8px; align-items:center; margin:5px 0; }
-  .fil input[type=color] { width:34px; height:28px; border:1px solid var(--line); border-radius:6px; background:none; padding:0; }
+  .mini { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin:6px 0; }
+  .mini button { background:#2a2f39; color:var(--text); font-weight:500; padding:7px 6px; }
+  .seg { display:grid; grid-template-columns:repeat(3,1fr); gap:4px; margin-bottom:6px; }
+  .seg button { background:#2a2f39; color:var(--text); padding:6px 4px; font-weight:500; }
+  .seg button.on { background:var(--acc); color:#111; }
+  #drawBar { display:none; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:6px; }
+  #drawBar button { padding:6px; }
   .addr { display:grid; grid-template-columns: 1fr 64px; gap:6px; margin-top:4px; }
   .addr button { padding:6px 8px; }
   #addrResults { display:flex; flex-direction:column; gap:3px; margin-top:4px; }
   #addrResults button { text-align:left; background:#0f1115; color:var(--text); border:1px solid var(--line); font-weight:400; padding:6px 8px; }
   #addrResults button:hover, #addrResults button.on { border-color:var(--acc); }
   #addrResults button small { color:var(--mute); display:block; font-size:11px; }
+  .list { display:flex; flex-direction:column; gap:4px; margin:6px 0; max-height:260px; overflow-y:auto; }
+  .item { display:flex; gap:6px; align-items:center; background:#0f1115; border:1px solid var(--line); border-radius:6px; padding:4px 6px; }
+  .item input[type=text] { flex:1; min-width:0; border:0; background:transparent; padding:3px 2px; }
+  .item select { width:auto; padding:3px 4px; flex:none; }
+  .item input[type=number] { width:78px; padding:3px 6px; flex:none; }
+  .item input[type=color] { width:28px; height:24px; border:1px solid var(--line); border-radius:5px; background:none; padding:0; flex:none; cursor:pointer; }
+  .item .meta { color:var(--mute); font-size:11px; white-space:nowrap; }
+  .item label.r { display:flex; gap:3px; align-items:center; color:var(--mute); font-size:11px; flex:none; }
+  button.ib { width:auto; padding:4px 8px; background:#2a2f39; color:var(--text); font-weight:500; flex:none; }
+  button.ib.x { color:#ff8a7a; }
+  .asg { display:grid; grid-template-columns: 1fr 170px; gap:8px; align-items:center; margin:4px 0; color:#c7cbd3; }
+  .empty { color:var(--mute); font-size:12px; padding:4px 2px; }
   #status { margin-top:8px; color:var(--mute); min-height:18px; font-size:12px; }
   #status.err { color:#ff7a6b; }
   main { position:relative; }
   #view { position:absolute; inset:0; }
-  #hud { position:absolute; left:14px; bottom:12px; background:rgba(17,19,23,.82); border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:12px; color:#c7cbd3; pointer-events:none; }
+  #labels { position:absolute; inset:0; pointer-events:none; overflow:hidden; }
+  .plabel { position:absolute; left:0; top:0; font-size:11px; background:rgba(17,19,23,.8); border:1px solid var(--line); padding:1px 6px; border-radius:4px; white-space:nowrap; color:var(--text); }
+  #hud { position:absolute; left:14px; bottom:12px; background:rgba(17,19,23,.82); border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:12px; color:#c7cbd3; pointer-events:none; max-width:60%; }
   #hud b { color:var(--text); }
   #busy { position:absolute; inset:0; display:none; align-items:center; justify-content:center; background:rgba(10,11,14,.55); font:600 15px Inter; }
   #busy.on { display:flex; }
   .attr { color:var(--mute); font-size:11px; margin-top:14px; }
   .attr a { color:var(--mute); }
+  .hide { display:none !important; }
   @media (max-width: 820px) { #app { grid-template-columns: 1fr; grid-template-rows: auto 60vh; height:auto; } aside { border-right:0; } main { height:60vh; } }
 </style>
 </head>
 <body>
 <div id="app">
 <aside>
-  <h1>Relief <span>Maker</span></h1>
-  <div class="sub">Address or coordinates in, 4-color multi-part 3MF out.</div>
+  <h1>Relief <span>Maker</span> V2</h1>
+  <div class="sub">Address in, multi-color multi-part 3MF out — with trails, POIs and detailed water.</div>
+  <div class="seg" id="modeSeg">
+    <button type="button" data-mode="center" class="on">Set center</button>
+    <button type="button" data-mode="trail">Draw trail</button>
+    <button type="button" data-mode="poi">Add POI</button>
+  </div>
   <div id="map"></div>
+  <div id="drawBar"><button type="button" id="drawUndo" class="sec">Undo point</button><button type="button" id="drawDone">Finish trail</button></div>
+  <div id="modeHint" class="hint">Click the map to set the center of the print.</div>
   <div class="row full"><label>Address or place
     <div class="addr"><input type="text" id="addr" placeholder="e.g. Schöckl, Graz  ·  Hauptplatz 1, 8010 Graz" autocomplete="off"><button id="addrBtn" class="sec">Find</button></div></label>
     <div id="addrResults"></div>
-    <label class="check"><input type="checkbox" id="addrLabel"> Use the found place as the label name</label></div>
+    <label class="check"><input type="checkbox" id="addrLabel"> Use the found place as the label name</label>
+    <button type="button" id="addrPoi" class="sec hide" style="margin-top:4px">+ Add found place as POI</button></div>
   <div class="row full"><label>Center (lat, lon) — paste from Google Maps, or click the map
     <input type="text" id="coords" value="47.115, 15.450"></label></div>
   <div class="row"><label>Area width<small>km of real terrain across the print</small></label><input type="number" id="areaKm" value="22" min="1" max="200" step="0.5"></div>
@@ -79,8 +109,8 @@
   <div id="status"></div>
 
   <details open><summary>Print size</summary>
-    <div class="row"><label>Map width (mm)</label><input type="number" id="printW" value="160" min="40" max="260"></div>
-    <div class="row"><label>Map depth (mm)</label><input type="number" id="printD" value="180" min="40" max="260"></div>
+    <div class="row"><label>Map width (mm)</label><input type="number" id="printW" value="160" min="40" max="300"></div>
+    <div class="row"><label>Map depth (mm)</label><input type="number" id="printD" value="180" min="40" max="300"></div>
     <div class="row"><label>Bed size (mm)<small>used to center the model</small></label><input type="number" id="bed" value="270" min="100" max="600"></div>
     <div class="row"><label>Mesh resolution (mm)<small>smaller = finer, bigger file</small></label><input type="number" id="pitch" value="0.5" min="0.3" max="2" step="0.1"></div>
   </details>
@@ -90,6 +120,57 @@
     <div class="row"><label>Base thickness (mm)</label><input type="number" id="base" value="3" min="1" max="10" step="0.2"></div>
     <div class="row"><label>Min. terrain above base (mm)</label><input type="number" id="floor" value="1.2" min="0.4" max="10" step="0.2"></div>
     <div class="row"><label>Smoothing</label><div class="rng"><input type="range" id="smooth" min="0" max="6" step="1" value="1"><output></output></div></div>
+  </details>
+
+  <details open><summary>Colors &amp; filaments</summary>
+    <div class="row"><label>Preset<small>replaces the list below</small></label><select id="preset">
+      <option value="">Choose…</option>
+      <optgroup label="Custom — 4 filaments"><option value="classic">Classic: black · gray · yellow · cyan (contours)</option>
+      <option value="alpine4">Alpine: dark green · olive · light gray · blue</option>
+      <option value="gold4">Forest &amp; gold: green · stone · gold · blue</option>
+      <option value="snow4">High alpine: charcoal · rock · snow · red trail</option></optgroup>
+      <optgroup label="Realistic — any number"><option value="satellite">Satellite: 9 filaments</option></optgroup>
+    </select></div>
+    <div class="row"><label>Mode</label><select id="colMode">
+      <option value="contour">Custom · contour lines (4 colors)</option>
+      <option value="bands">Custom · elevation bands (4 colors)</option>
+      <option value="real">Realistic · satellite (any number)</option>
+    </select></div>
+    <h3 id="filTitle">Your 4 filaments</h3>
+    <div class="hint" id="filHint"></div>
+    <div id="filList" class="list"></div>
+    <div class="mini" id="filTools"><button type="button" id="filAdd">+ Add filament</button><button type="button" id="filSort">Sort by tool</button></div>
+    <h3>Terrain coloring</h3>
+    <div id="pContour">
+      <div class="asg"><span>Terrain</span><select class="fsel" data-asg="terrain"></select></div>
+    </div>
+    <div id="pBands">
+      <div class="hint">Each band runs from the previous height up to its "up to" height. Heights are snapped to whole layers.</div>
+      <div id="bandList" class="list"></div>
+      <div class="mini"><button type="button" id="bandAdd">+ Add band</button><button type="button" id="bandAuto">Auto heights</button></div>
+      <div class="asg"><span>Steep slopes</span><select class="fsel" data-asg="rock" data-none="1"></select></div>
+      <div class="row"><label>Steeper than (°)<small>real slope, before exaggeration</small></label><input type="number" id="slopeDeg" value="35" min="5" max="80" step="1"></div>
+    </div>
+    <div id="pReal">
+      <div class="row"><label>Imagery</label><select id="imgSrc">
+        <option value="esri">Esri World Imagery (sharp)</option>
+        <option value="s2">Sentinel-2 cloudless (soft, even)</option>
+      </select></div>
+      <label class="check"><input type="checkbox" id="autoLevels" checked> Auto-levels (stretch dark imagery)</label>
+      <div class="row"><label>Saturation</label><div class="rng"><input type="range" id="sat" min="0.5" max="2.5" step="0.05" value="1.3"><output></output></div></div>
+      <div class="row"><label>Cleanup<small>removes single-pixel speckles</small></label><div class="rng"><input type="range" id="cleanup" min="0" max="5" step="1" value="2"><output></output></div></div>
+      <label class="check"><input type="checkbox" id="realContours"> Draw contour lines on top</label>
+      <div class="row"><label>Filaments from imagery<small>replaces the "R" filaments</small></label><div style="display:grid;grid-template-columns:52px 1fr;gap:6px"><input type="number" id="kN" value="6" min="2" max="12"><button type="button" id="kBtn" class="sec" style="padding:6px">Create</button></div></div>
+    </div>
+    <div id="pSkin" class="row"><label>Color skin (mm)<small>depth of the colored surface layer</small></label><input type="number" id="skin" value="0.6" min="0.2" max="2" step="0.1"></div>
+
+    <h3>Assignments</h3>
+    <div class="asg"><span>Base plate</span><select class="fsel" data-asg="base"></select></div>
+    <div class="asg" id="rowTerrainCore"><span>Inner core<small style="display:block;font-size:11px;color:var(--mute)">hidden inside, under the color skin</small></span><select class="fsel" data-asg="core"></select></div>
+    <div class="asg"><span>Contours &amp; label text</span><select class="fsel" data-asg="text"></select></div>
+    <div class="asg"><span>Water</span><select class="fsel" data-asg="water"></select></div>
+    <div class="asg"><span>Trails</span><select class="fsel" data-asg="trail"></select></div>
+    <div class="asg"><span>POI markers</span><select class="fsel" data-asg="poi"></select></div>
   </details>
 
   <details open><summary>Contour lines</summary>
@@ -102,9 +183,38 @@
   <details open><summary>Water (OpenStreetMap)</summary>
     <label class="check"><input type="checkbox" id="wRivers" checked> Rivers &amp; canals</label>
     <label class="check"><input type="checkbox" id="wStreams"> Streams</label>
-    <label class="check"><input type="checkbox" id="wLakes" checked> Lakes &amp; river areas</label>
-    <div class="row"><label>River line width (mm)</label><input type="number" id="riverW" value="1.4" min="0.4" max="5" step="0.1"></div>
+    <label class="check"><input type="checkbox" id="wLakes" checked> Lakes, ponds &amp; reservoirs</label>
+    <label class="check"><input type="checkbox" id="wRiverAreas" checked> Wide rivers as true outlines</label>
+    <label class="check"><input type="checkbox" id="wFlat" checked> Flat lake surfaces</label>
+    <label class="check"><input type="checkbox" id="wFlow" checked> Rivers flow downhill (cut a clean valley floor)</label>
+    <label class="check"><input type="checkbox" id="wWidthTag" checked> Use real river width from OSM where wider</label>
+    <div class="row"><label>River width (mm)</label><input type="number" id="riverW" value="1.2" min="0.3" max="5" step="0.1"></div>
+    <div class="row"><label>Stream width (mm)</label><input type="number" id="streamW" value="0.7" min="0.3" max="3" step="0.1"></div>
     <div class="row"><label>Carve depth (mm)</label><input type="number" id="carve" value="0.6" min="0.4" max="3" step="0.1"></div>
+    <div class="row"><label>Water surface below shore (mm)</label><input type="number" id="recess" value="0.2" min="0" max="1.5" step="0.1"></div>
+    <div class="row"><label>Smallest lake (mm²)<small>on the print; hides tiny ponds</small></label><input type="number" id="minLake" value="3" min="0" max="200" step="1"></div>
+  </details>
+
+  <details open><summary>Trails</summary>
+    <div class="mini"><button type="button" id="impBtn">Import GPX / KML / GeoJSON</button><button type="button" id="osmRoutes">OSM hiking routes</button></div>
+    <input type="file" id="impFile" accept=".gpx,.kml,.kmz,.geojson,.json" multiple class="hide">
+    <label class="check"><input type="checkbox" id="wptPoi" checked> Import waypoints as POIs</label>
+    <div class="hint">Or pick "Draw trail" above the map and click along the route (double-click to finish).</div>
+    <div id="trailList" class="list"></div>
+    <div class="row"><label>Style</label><select id="trailMode"><option value="raised">Raised ridge</option><option value="inlay">Inlaid (flush)</option></select></div>
+    <div class="row"><label>Trail width (mm)</label><input type="number" id="trailW" value="0.9" min="0.3" max="4" step="0.1"></div>
+    <div class="row" id="rowTrailH"><label>Raised height (mm)</label><input type="number" id="trailH" value="0.6" min="0.2" max="3" step="0.1"></div>
+    <div class="row" id="rowTrailD"><label>Inlay depth (mm)</label><input type="number" id="trailDepth" value="0.6" min="0.2" max="2" step="0.1"></div>
+  </details>
+
+  <details open><summary>POI markers</summary>
+    <div class="mini"><button type="button" id="osmPeaks">+ OSM peaks &amp; huts</button><button type="button" id="poiClear">Remove all</button></div>
+    <div class="row"><label>Max. per type<small>highest first</small></label><input type="number" id="osmMax" value="6" min="1" max="40"></div>
+    <div id="poiList" class="list"></div>
+    <div class="row"><label>Shape for new POIs</label><select id="poiShape"><option value="tri">▲ Triangle (summit)</option><option value="dot">● Dot</option><option value="ring">◯ Ring</option><option value="square">■ Square (hut)</option><option value="diamond">◆ Diamond</option><option value="star">★ Star</option></select></div>
+    <div class="row"><label>Marker size (mm)</label><input type="number" id="poiSize" value="3.5" min="1.5" max="12" step="0.5"></div>
+    <div class="row"><label>Marker height (mm)</label><input type="number" id="poiH" value="1.2" min="0.4" max="6" step="0.2"></div>
+    <label class="check"><input type="checkbox" id="poiNames" checked> Show POI names in the preview</label>
   </details>
 
   <details open><summary>Label strip</summary>
@@ -115,19 +225,13 @@
     <div class="row"><label>Text size</label><div class="rng"><input type="range" id="textScale" min="0.5" max="1.4" step="0.05" value="1"><output></output></div></div>
   </details>
 
-  <details open><summary>Filaments &amp; tools</summary>
-    <div class="fil"><input type="color" id="cAccent" value="#f6c21c"><span>Contours + text</span><select id="tAccent"></select></div>
-    <div class="fil"><input type="color" id="cGray" value="#a3a6aa"><span>Terrain</span><select id="tGray"></select></div>
-    <div class="fil"><input type="color" id="cWater" value="#5fc3d6"><span>Water</span><select id="tWater"></select></div>
-    <div class="fil"><input type="color" id="cBase" value="#17181b"><span>Base</span><select id="tBase"></select></div>
-  </details>
-
   <div class="btns"><button id="dl3mf" disabled>Download 3MF</button><button id="dlStl" class="sec" disabled>STLs (zip)</button></div>
   <div id="exportInfo" class="sub" style="margin-top:8px"></div>
-  <div class="attr">Elevation: <a href="https://registry.opendata.aws/terrain-tiles/" target="_blank">AWS Terrain Tiles</a> (Mapzen). Water: © <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors. Map tiles: Esri. Print with the layer height above so the contour lines land on whole layers.</div>
+  <div class="attr">Elevation: <a href="https://registry.opendata.aws/terrain-tiles/" target="_blank">AWS Terrain Tiles</a> (Mapzen). Water, routes, peaks: © <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors. Map &amp; imagery: Esri, Maxar, Earthstar Geographics; Sentinel-2 cloudless by <a href="https://s2maps.eu" target="_blank">EOX</a> (CC BY-NC-SA 4.0, non-commercial). Print with the layer height above so contour lines and bands land on whole layers.</div>
 </aside>
 <main>
   <div id="view"></div>
+  <div id="labels"></div>
   <div id="hud">Load a location to start.</div>
   <div id="busy">Working…</div>
 </main>
@@ -136,13 +240,12 @@
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { zipSync } from 'fflate';
+import { zipSync, unzipSync } from 'fflate';
 
 // ===== CORE (pure functions, no DOM) =====
 const KM_LAT = 111.2;
 const kmLon = lat => 111.32 * Math.cos(lat * Math.PI / 180);
 
-// Growable typed arrays
 class U32 { constructor(n = 1 << 16) { this.a = new Uint32Array(n); this.n = 0; }
   push3(x, y, z) { if (this.n + 3 > this.a.length) { const b = new Uint32Array(this.a.length * 2); b.set(this.a); this.a = b; } this.a[this.n++] = x; this.a[this.n++] = y; this.a[this.n++] = z; }
   get arr() { return this.a.subarray(0, this.n); } }
@@ -153,24 +256,88 @@ function geom(p) {
   return { scale, areaKmY };
 }
 
-// Build model grid (heights in mm, water mask) from a DEM sampler and a water rasterizer
-function computeModel(p, dem, waterRaster, pitch) {
+// --- raster helpers (grid in mm, row 0 = south) ---
+function densify(pts, step) {
+  const out = [pts[0]];
+  for (let k = 1; k < pts.length; k++) {
+    const [ax, ay] = pts[k - 1], [bx, by] = pts[k];
+    const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / step));
+    for (let j = 1; j <= n; j++) out.push([ax + (bx - ax) * j / n, ay + (by - ay) * j / n]);
+  }
+  return out;
+}
+function sampleGrid(A, G, x, y) {
+  const fx = Math.min(Math.max(x / G.dx, 0), G.nx - 1.001), fy = Math.min(Math.max(y / G.dy, 0), G.ny - 1.001);
+  const c = fx | 0, r = fy | 0, ax = fx - c, ay = fy - r, i = r * G.nx + c;
+  return (A[i] * (1 - ax) + A[i + 1] * ax) * (1 - ay) + (A[i + G.nx] * (1 - ax) + A[i + G.nx + 1] * ax) * ay;
+}
+// mark grid nodes within rr (mm) of a polyline; optionally write min of an interpolated value
+function stampPolyline(pts, rr, G, M, prof, RV) {
+  const { nx, ny, dx, dy } = G, r2 = rr * rr;
+  for (let k = 0; k + 1 < pts.length; k++) {
+    const [ax, ay] = pts[k], [bx, by] = pts[k + 1];
+    const c0 = Math.max(0, Math.floor((Math.min(ax, bx) - rr) / dx)), c1 = Math.min(nx - 1, Math.ceil((Math.max(ax, bx) + rr) / dx));
+    const q0 = Math.max(0, Math.floor((Math.min(ay, by) - rr) / dy)), q1 = Math.min(ny - 1, Math.ceil((Math.max(ay, by) + rr) / dy));
+    if (c0 > c1 || q0 > q1) continue;
+    const ex = bx - ax, ey = by - ay, L2 = ex * ex + ey * ey;
+    for (let r = q0; r <= q1; r++) for (let c = c0; c <= c1; c++) {
+      const px = c * dx - ax, py = r * dy - ay;
+      let t = L2 ? (px * ex + py * ey) / L2 : 0; t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const qx = px - t * ex, qy = py - t * ey;
+      if (qx * qx + qy * qy <= r2) {
+        const i = r * nx + c; M[i] = 1;
+        if (prof) { const v = prof[k] + t * (prof[k + 1] - prof[k]); if (v < RV[i]) RV[i] = v; }
+      }
+    }
+  }
+}
+// even-odd scanline fill of rings (mm) -> node indices
+function fillRings(rings, G) {
+  const { nx, ny, dx, dy } = G, rows = new Map();
+  for (const ring of rings) {
+    const n = ring.length; if (n < 3) continue;
+    for (let k = 0; k < n; k++) {
+      const [x1, y1] = ring[k], [x2, y2] = ring[(k + 1) % n];
+      const r1 = y1 / dy, r2 = y2 / dy; if (r1 === r2) continue;
+      const lo = Math.max(0, Math.ceil(Math.min(r1, r2))), hi = Math.min(ny - 1, Math.ceil(Math.max(r1, r2)) - 1);
+      for (let r = lo; r <= hi; r++) { const t = (r - r1) / (r2 - r1); let a = rows.get(r); if (!a) rows.set(r, a = []); a.push((x1 + t * (x2 - x1)) / dx); }
+    }
+  }
+  const cells = [];
+  for (const [r, a] of rows) {
+    a.sort((u, v) => u - v);
+    for (let k = 0; k + 1 < a.length; k += 2) { const c0 = Math.max(0, Math.ceil(a[k])), c1 = Math.min(nx - 1, Math.floor(a[k + 1])); for (let c = c0; c <= c1; c++) cells.push(r * nx + c); }
+  }
+  return cells;
+}
+// elevation profile along a river: smoothed, then forced to never rise in flow direction
+function riverProfile(pts, Hs, G) {
+  const n = pts.length, raw = new Float32Array(n), sm = new Float32Array(n), out = new Float32Array(n);
+  for (let k = 0; k < n; k++) raw[k] = sampleGrid(Hs, G, pts[k][0], pts[k][1]);
+  for (let k = 0; k < n; k++) { let s = 0, c = 0; for (let j = Math.max(0, k - 3); j <= Math.min(n - 1, k + 3); j++) { s += raw[j]; c++; } sm[k] = s / c; }
+  const q = Math.max(1, Math.floor(n * 0.15)); let a = 0, b = 0;
+  for (let k = 0; k < q; k++) { a += sm[k]; b += sm[n - 1 - k]; }
+  let m = Infinity;
+  if (b <= a) for (let k = 0; k < n; k++) { m = Math.min(m, sm[k]); out[k] = m; }
+  else for (let k = n - 1; k >= 0; k--) { m = Math.min(m, sm[k]); out[k] = m; }
+  return out;
+}
+
+// Build model grid. feats = { water:{lines,areas}, trails:[{segs:[[[lat,lon]..]]}], pois:[{lat,lon,shape,name}] }
+function computeModel(p, dem, feats, pitch) {
+  feats = feats || {};
   const { scale, areaKmY } = geom(p);
   const nx = Math.round(p.printW / pitch) + 1, ny = Math.round(p.printD / pitch) + 1;
-  const dx = p.printW / (nx - 1), dy = p.printD / (ny - 1);
+  const dx = p.printW / (nx - 1), dy = p.printD / (ny - 1), d = Math.max(dx, dy);
   const xs = new Float32Array(nx), ys = new Float32Array(ny);
   for (let c = 0; c < nx; c++) xs[c] = c * dx;
   for (let r = 0; r < ny; r++) ys[r] = r * dy;
-  const N = nx * ny, H = new Float32Array(N);
+  const N = nx * ny, H = new Float32Array(N), G = { nx, ny, dx, dy };
   const kl = kmLon(p.lat);
   for (let r = 0; r < ny; r++) {
     const lat = p.lat + (ys[r] / scale - areaKmY / 2) / KM_LAT;
-    for (let c = 0; c < nx; c++) {
-      const lon = p.lon + (xs[c] / scale - p.areaKm / 2) / kl;
-      H[r * nx + c] = dem(lat, lon);
-    }
+    for (let c = 0; c < nx; c++) H[r * nx + c] = dem(lat, p.lon + (xs[c] / scale - p.areaKm / 2) / kl);
   }
-  // smoothing: repeated 3x3 box blur
   let A = H, B = new Float32Array(N);
   for (let it = 0; it < p.smooth; it++) {
     for (let r = 0; r < ny; r++) for (let c = 0; c < nx; c++) {
@@ -184,20 +351,89 @@ function computeModel(p, dem, waterRaster, pitch) {
   const Hs = A;
   let hmin = Infinity, hmax = -Infinity;
   for (let i = 0; i < N; i++) { if (Hs[i] < hmin) hmin = Hs[i]; if (Hs[i] > hmax) hmax = Hs[i]; }
-  const VS = scale / 1000 * p.vex;              // mm per m
-  const z0 = p.base + p.floor;
+  const VS = scale / 1000 * p.vex, z0 = p.base + p.floor;
   const zof = e => z0 + (e - hmin) * VS;
-  const W = waterRaster ? waterRaster(nx, ny, pitch) : new Uint8Array(N);
-  const Zc = new Float32Array(N), TR = new Float32Array(N);
-  for (let i = 0; i < N; i++) {
-    const z = zof(Hs[i]);
-    Zc[i] = z - (W[i] ? p.carve : 0);
-    TR[i] = W[i] ? Math.max(p.carve - p.recess, 0.2) : 0;
+  const toMM = (lat, lon) => [((lon - p.lon) * kl + p.areaKm / 2) * scale, ((lat - p.lat) * KM_LAT + areaKmY / 2) * scale];
+  const rad = w => Math.max(w / 2 - d * 0.35, d * 0.72);
+
+  // ---- water: W 0 none, 1 river line, 2 river area, 3 lake ----
+  const W = new Uint8Array(N), E = Float32Array.from(Hs);
+  let nLakes = 0;
+  const wat = feats.water;
+  if (wat) {
+    for (const a of wat.areas) {
+      const lake = a.cls === 'lake';
+      if (lake ? !p.wLakes : !p.wRiverAreas) continue;
+      const cells = fillRings(a.rings.map(r => r.map(q => toMM(q[0], q[1]))), G);
+      if (!cells.length || cells.length * dx * dy < p.minLake) continue;
+      if (lake) {
+        nLakes++;
+        let lvl = 0;
+        if (p.wFlat) { const hs = Float32Array.from(cells, i => Hs[i]).sort(); lvl = hs[Math.floor((hs.length - 1) * 0.2)]; }
+        for (const i of cells) { W[i] = 3; if (p.wFlat) E[i] = lvl; }
+      } else for (const i of cells) if (W[i] !== 3) W[i] = 2;
+    }
+    if (p.wFlow) {   // river areas: valley floor = local minimum
+      const k = Math.max(1, Math.round(1.0 / d));
+      for (let r = 0; r < ny; r++) for (let c = 0; c < nx; c++) {
+        const i = r * nx + c; if (W[i] !== 2) continue;
+        let mn = Hs[i];
+        for (let j = Math.max(0, r - k); j <= Math.min(ny - 1, r + k); j++) for (let q = Math.max(0, c - k); q <= Math.min(nx - 1, c + k); q++) if (Hs[j * nx + q] < mn) mn = Hs[j * nx + q];
+        E[i] = mn;
+      }
+    }
+    const LM = new Uint8Array(N), RV = p.wFlow ? new Float32Array(N).fill(Infinity) : null;
+    for (const ln of wat.lines) {
+      const stream = ln.kind === 'stream';
+      if (stream ? !p.wStreams : !p.wRivers) continue;
+      let w = stream ? p.streamW : p.riverW;
+      if (p.wWidthTag && ln.width > 0) w = Math.max(w, ln.width / 1000 * scale);
+      if (ln.pts.length < 2) continue;
+      const pts = densify(ln.pts.map(q => toMM(q[0], q[1])), d);
+      stampPolyline(pts, rad(w), G, LM, RV ? riverProfile(pts, Hs, G) : null, RV);
+    }
+    const maxDrop = 1.5 / VS;
+    for (let i = 0; i < N; i++) if (LM[i] && W[i] !== 3) {
+      if (!W[i]) W[i] = 1;
+      if (RV && RV[i] < E[i]) E[i] = Math.max(RV[i], Hs[i] - maxDrop);
+    }
   }
-  // contour sheets aligned to layer grid
-  const sheets = [];
-  const interval = p.interval;
-  let first = p.firstContour > 0 ? p.firstContour : Math.ceil((hmin + interval * 0.6) / interval) * interval;
+  const Zc = new Float32Array(N), TR = new Float32Array(N), wTR = Math.max(p.carve - p.recess, 0.2);
+  for (let i = 0; i < N; i++) {
+    const z = zof(E[i]);
+    if (W[i]) { Zc[i] = Math.max(z - p.carve, p.base + 0.2); TR[i] = wTR; } else Zc[i] = z;
+  }
+
+  // ---- POIs: flat pad in the terrain + exact prism on top ----
+  const prisms = [], pads = []; let poiSkipped = 0;
+  const PADZ = new Float32Array(N).fill(-Infinity);
+  for (const q of feats.pois || []) {
+    const [X, Y] = toMM(q.lat, q.lon), R = p.poiSize / 2;
+    if (X - R < 0 || Y - R < 0 || X + R > p.printW || Y + R > p.printD) { poiSkipped++; continue; }
+    const pr = R + 1.6 * d, cells = []; let zp = -Infinity;
+    for (let r = Math.max(0, Math.floor((Y - pr) / dy)); r <= Math.min(ny - 1, Math.ceil((Y + pr) / dy)); r++)
+      for (let c = Math.max(0, Math.floor((X - pr) / dx)); c <= Math.min(nx - 1, Math.ceil((X + pr) / dx)); c++)
+        if ((c * dx - X) ** 2 + (r * dy - Y) ** 2 <= pr * pr) { const i = r * nx + c; cells.push(i); zp = Math.max(zp, Zc[i] + TR[i]); }
+    pads.push({ q, X, Y, R, cells });
+    for (const i of cells) if (zp > PADZ[i]) PADZ[i] = zp;
+  }
+  for (let i = 0; i < N; i++) if (PADZ[i] > -Infinity) { Zc[i] = PADZ[i]; TR[i] = 0; W[i] = 0; }
+  for (const pd of pads) { let zb = -Infinity; for (const i of pd.cells) zb = Math.max(zb, PADZ[i]); prisms.push({ shape: pd.q.shape || 'tri', name: pd.q.name || '', X: pd.X, Y: pd.Y, R: pd.R, z0: zb, z1: zb + p.poiH }); }
+
+  // ---- trails ----
+  const TM = new Uint8Array(N);
+  for (const t of feats.trails || []) for (const seg of t.segs) if (seg.length >= 2) stampPolyline(seg.map(q => toMM(q[0], q[1])), rad(p.trailW), G, TM, null, null);
+  const inlay = p.trailMode === 'inlay';
+  const TL = new Float32Array(N), TU = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    if (TM[i] && (PADZ[i] > -Infinity || (inlay && W[i]))) TM[i] = 0;
+    if (TM[i] && inlay) { const top = Zc[i]; Zc[i] = Math.max(top - p.trailDepth, p.base + 0.2); TL[i] = Zc[i]; TU[i] = top; }
+    else { TL[i] = Zc[i] + TR[i]; TU[i] = TL[i] + (TM[i] ? p.trailH : 0); }
+  }
+
+  // ---- contour sheets aligned to layer grid ----
+  const sheets = [], interval = p.interval;
+  const first = p.firstContour > 0 ? p.firstContour : Math.ceil((hmin + interval * 0.6) / interval) * interval;
   const thick = p.sheetLayers * p.layer;
   if (interval > 0 && p.sheetLayers > 0)
     for (let e = first; e <= hmax; e += interval) {
@@ -205,8 +441,9 @@ function computeModel(p, dem, waterRaster, pitch) {
       if (z <= p.base + 1e-6) continue;
       sheets.push([z, z + thick, e]);
     }
-  let zmax = 0; for (let i = 0; i < N; i++) zmax = Math.max(zmax, Zc[i] + TR[i]);
-  return { nx, ny, xs, ys, Zc, TR, W, hmin, hmax, sheets, zmax, scale, areaKmY };
+  let zmax = 0; for (let i = 0; i < N; i++) zmax = Math.max(zmax, TU[i]);
+  for (const pr of prisms) zmax = Math.max(zmax, pr.z1);
+  return { nx, ny, dx, dy, xs, ys, Hs, Zc, TR, W, TM, TL, TU, prisms, poiSkipped, nLakes, hmin, hmax, sheets, zmax, scale, areaKmY, zof };
 }
 
 // Closed shell between two heightfields L<=U; zero-thickness vertices merged
@@ -237,6 +474,23 @@ function hfBody(L, U, nx, ny, xs, ys) {
   return compact(T.arr, i => { const j = i < N ? i : i - N; return [xs[j % nx], ys[(j / nx) | 0], vz(i)]; }, 2 * N);
 }
 
+// Columns over grid cells with C[cell] === f, from L to U (per node); vertical walls at color borders
+function cellBody(C, f, cw, ch, L, U, nx, xs, ys) {
+  const N = nx * (ch + 1), T = new U32();
+  const inF = (r, c) => r >= 0 && r < ch && c >= 0 && c < cw && C[r * cw + c] === f;
+  for (let r = 0; r < ch; r++) for (let c = 0; c < cw; c++) {
+    if (C[r * cw + c] !== f) continue;
+    const a = r * nx + c, b = a + 1, cc = a + nx + 1, d = a + nx;
+    T.push3(a, b, cc); T.push3(a, cc, d); T.push3(N + cc, N + b, N + a); T.push3(N + d, N + cc, N + a);
+    if (!inF(r - 1, c)) { T.push3(N + a, N + b, b); T.push3(N + a, b, a); }
+    if (!inF(r, c + 1)) { T.push3(N + b, N + cc, cc); T.push3(N + b, cc, b); }
+    if (!inF(r + 1, c)) { T.push3(N + cc, N + d, d); T.push3(N + cc, d, cc); }
+    if (!inF(r, c - 1)) { T.push3(N + d, N + a, a); T.push3(N + d, a, d); }
+  }
+  if (!T.n) return null;
+  return compact(T.arr, i => { const j = i < N ? i : i - N; return [xs[j % nx], ys[(j / nx) | 0], i < N ? U[j] : L[j]]; }, 2 * N);
+}
+
 function compact(F, pos, nv) {
   const map = new Int32Array(nv).fill(-1); let n = 0;
   const Fo = new Uint32Array(F.length);
@@ -250,6 +504,33 @@ function boxBody(x0, x1, y0, y1, z0, z1) {
   const V = new Float32Array([x0,y0,z0, x1,y0,z0, x1,y1,z0, x0,y1,z0, x0,y0,z1, x1,y0,z1, x1,y1,z1, x0,y1,z1]);
   const F = new Uint32Array([0,2,1, 0,3,2, 4,5,6, 4,6,7, 0,1,5, 0,5,4, 1,2,6, 1,6,5, 2,3,7, 2,7,6, 3,0,4, 3,4,7]);
   return { V, F };
+}
+
+// Exact marker prism (shape outline extruded from z0 to z1)
+function prismBody(shape, cx, cy, R, z0, z1) {
+  const ring = (r, n, rot = 0) => Array.from({ length: n }, (_, k) => { const a = rot + k * 2 * Math.PI / n; return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; });
+  let outer, inner = null;
+  if (shape === 'tri') outer = ring(R, 3, Math.PI / 2);
+  else if (shape === 'square') outer = ring(R * 1.05, 4, Math.PI / 4);
+  else if (shape === 'diamond') outer = ring(R, 4, 0);
+  else if (shape === 'star') outer = Array.from({ length: 10 }, (_, k) => { const a = Math.PI / 2 + k * Math.PI / 5, r = k % 2 ? R * 0.45 : R; return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; });
+  else if (shape === 'ring') { outer = ring(R, 40); inner = ring(R * 0.55, 40); }
+  else outer = ring(R, 40);
+  const n = outer.length, V = [], F = [];
+  const v = (x, y, z) => { V.push(x, y, z); return V.length / 3 - 1; };
+  const ob = outer.map(q => v(q[0], q[1], z0)), ot = outer.map(q => v(q[0], q[1], z1));
+  for (let k = 0; k < n; k++) { const k1 = (k + 1) % n; F.push(ob[k], ob[k1], ot[k1], ob[k], ot[k1], ot[k]); }
+  if (!inner) {
+    const cb = v(cx, cy, z0), ct = v(cx, cy, z1);
+    for (let k = 0; k < n; k++) { const k1 = (k + 1) % n; F.push(ct, ot[k], ot[k1], cb, ob[k1], ob[k]); }
+  } else {
+    const ib = inner.map(q => v(q[0], q[1], z0)), it = inner.map(q => v(q[0], q[1], z1));
+    for (let k = 0; k < n; k++) { const k1 = (k + 1) % n;
+      F.push(ot[k], ot[k1], it[k1], ot[k], it[k1], it[k]);
+      F.push(ob[k], ib[k1], ob[k1], ob[k], ib[k], ib[k1]);
+      F.push(ib[k], it[k1], ib[k1], ib[k], it[k], it[k1]); }
+  }
+  return { V: new Float32Array(V), F: new Uint32Array(F) };
 }
 
 // Ink mask M (Uint8Array ww*hh, row 0 = south) -> extruded pixel solid
@@ -276,24 +557,99 @@ function mergeBodies(list) {
   return { V, F };
 }
 
-// Build the 4 printable bodies
-function buildBodies(p, m, textMask) {
-  const { nx, ny, xs, ys, Zc, TR, sheets } = m;
-  const N = nx * ny;
-  const levels = [p.base]; for (const s of sheets) levels.push(s[0], s[1]); levels.push(1e9);
-  const gray = [], yellow = [];
-  const L = new Float32Array(N), U = new Float32Array(N);
-  for (let k = 0; k < levels.length - 1; k++) {
-    const a = levels[k], b = levels[k + 1];
-    for (let i = 0; i < N; i++) { L[i] = Math.min(a, Zc[i]); U[i] = Math.min(b, Zc[i]); }
-    const body = hfBody(L, U, nx, ny, xs, ys);
-    if (body) (k % 2 ? yellow : gray).push(body);
+// remove diagonal-only contacts between same-colored cells (keeps every part manifold)
+function fixDiagonals(C, cw, ch) {
+  for (let pass = 0; pass < 10; pass++) {
+    let changed = 0;
+    for (let r = 1; r < ch; r++) for (let c = 1; c < cw; c++) {
+      const i00 = (r - 1) * cw + c - 1, i01 = i00 + 1, i10 = i00 + cw, i11 = i10 + 1;
+      const a = C[i00], b = C[i01], cc = C[i10], dd = C[i11];
+      if (a === dd && b !== a && cc !== a) { C[i01] = a; changed++; }
+      else if (b === cc && a !== b && dd !== b) { C[i00] = b; changed++; }
+    }
+    if (!changed) break;
   }
+}
+function majority(C, cw, ch, passes) {
+  let A = C, B = new Int16Array(C.length); const nb = new Int16Array(9);
+  for (let it = 0; it < passes; it++) {
+    for (let r = 0; r < ch; r++) for (let c = 0; c < cw; c++) {
+      let n = 0;
+      for (let j = -1; j <= 1; j++) { const rr = r + j; if (rr < 0 || rr >= ch) continue; for (let i = -1; i <= 1; i++) { const q = c + i; if (q < 0 || q >= cw) continue; nb[n++] = A[rr * cw + q]; } }
+      const own = A[r * cw + c]; let best = own, bestN = 0;
+      for (let k = 0; k < n; k++) { let m = 0; for (let l = 0; l < n; l++) if (nb[l] === nb[k]) m++; if (m > bestN || (m === bestN && nb[k] === own)) { bestN = m; best = nb[k]; } }
+      B[r * cw + c] = best;
+    }
+    const t = A; A = B; B = t;
+  }
+  if (A !== C) C.set(A);
+}
+
+// Color plan: horizontal slabs (contours / bands) or a laterally colored surface skin
+// cfg: { mode:'contour'|'bands'|'real', terrainFil, accentFil, coreFil, bands:[{fil,upTo}], rockFil(-1 none), slopeDeg, skin, realContours, cellColors }
+function makePlan(p, m, cfg) {
+  const { nx, ny, Zc, Hs, sheets, zof } = m, N = nx * ny;
+  const bands = (cfg.bands || []).slice().sort((a, b) => a.upTo - b.upTo);
+  const layerZ = e => Math.round(zof(e) / p.layer) * p.layer;
+  const bandZ = bands.map(b => layerZ(b.upTo));
+  const bandAtE = e => { for (let k = 0; k < bands.length - 1; k++) if (e < bands[k].upTo) return bands[k].fil; return bands.length ? bands[bands.length - 1].fil : cfg.terrainFil; };
+  const bandAtZ = z => { for (let k = 0; k < bands.length - 1; k++) if (z < bandZ[k]) return bands[k].fil; return bands.length ? bands[bands.length - 1].fil : cfg.terrainFil; };
+  const useSkin = cfg.mode === 'real' || (cfg.mode === 'bands' && cfg.rockFil >= 0);
+  if (!useSkin) {
+    const cuts = new Set([p.base]);
+    for (const s of sheets) { cuts.add(s[0]); cuts.add(s[1]); }
+    if (cfg.mode === 'bands') for (let k = 0; k < bands.length - 1; k++) if (bandZ[k] > p.base) cuts.add(bandZ[k]);
+    const zs = [...cuts].sort((a, b) => a - b); zs.push(1e9);
+    const slabs = [];
+    for (let k = 0; k < zs.length - 1; k++) {
+      const a = zs[k], b = zs[k + 1], mid = b > 1e8 ? a + 1e-3 : (a + b) / 2;
+      const fil = sheets.some(s => mid > s[0] && mid < s[1]) ? cfg.accentFil : cfg.mode === 'bands' ? bandAtZ(mid) : cfg.terrainFil;
+      const last = slabs[slabs.length - 1];
+      if (last && last.fil === fil) last.z1 = b; else slabs.push({ z0: a, z1: b, fil });
+    }
+    return { slabs, skin: null };
+  }
+  const S = new Float32Array(N);
+  for (let i = 0; i < N; i++) S[i] = Math.max(Zc[i] - cfg.skin, p.base);
+  const cw = nx - 1, ch = ny - 1, C = new Int16Array(cw * ch);
+  if (cfg.mode === 'real') C.set(cfg.cellColors);
+  else {
+    const gx = m.dx / m.scale * 1000, gy = m.dy / m.scale * 1000, tanT = Math.tan(cfg.slopeDeg * Math.PI / 180);
+    for (let r = 0; r < ch; r++) for (let c = 0; c < cw; c++) {
+      const a = r * nx + c, b = a + 1, d = a + nx, e = d + 1;
+      const sx = ((Hs[b] - Hs[a]) + (Hs[e] - Hs[d])) / (2 * gx), sy = ((Hs[d] - Hs[a]) + (Hs[e] - Hs[b])) / (2 * gy);
+      C[r * cw + c] = Math.hypot(sx, sy) > tanT ? cfg.rockFil : bandAtE((Hs[a] + Hs[b] + Hs[d] + Hs[e]) / 4);
+    }
+  }
+  if (sheets.length && (cfg.mode === 'bands' || cfg.realContours))
+    for (let r = 0; r < ch; r++) for (let c = 0; c < cw; c++) {
+      const a = r * nx + c, v = [Zc[a], Zc[a + 1], Zc[a + nx], Zc[a + nx + 1]];
+      const lo = Math.min(...v), hi = Math.max(...v);
+      if (sheets.some(s => s[0] < hi && s[1] > lo)) C[r * cw + c] = cfg.accentFil;
+    }
+  fixDiagonals(C, cw, ch);
+  return { slabs: [{ z0: p.base, z1: 1e9, fil: cfg.coreFil }], skin: { S, C, cw, ch } };
+}
+
+// All printable bodies, merged per filament id. A = { base, water, trail, poi, text } filament ids
+function buildBodies(p, m, textMask, plan, A) {
+  const { nx, ny, xs, ys, Zc, TR, TL, TU, prisms } = m, N = nx * ny;
+  const out = new Map();
+  const add = (f, b) => { if (!b || !b.F.length) return; if (!out.has(f)) out.set(f, []); out.get(f).push(b); };
+  const top = plan.skin ? plan.skin.S : Zc;
+  const L = new Float32Array(N), U = new Float32Array(N);
+  for (const s of plan.slabs) {
+    for (let i = 0; i < N; i++) { L[i] = Math.min(s.z0, top[i]); U[i] = Math.min(s.z1, top[i]); }
+    add(s.fil, hfBody(L, U, nx, ny, xs, ys));
+  }
+  if (plan.skin) { const { S, C, cw, ch } = plan.skin; for (const f of new Set(C)) add(f, cellBody(C, f, cw, ch, S, Zc, nx, xs, ys)); }
   const Ut = new Float32Array(N); for (let i = 0; i < N; i++) Ut[i] = Zc[i] + TR[i];
-  const water = hfBody(Zc, Ut, nx, ny, xs, ys);
-  const base = boxBody(0, p.printW, -p.strip, p.printD, 0, p.base);
-  const text = textMask ? pixelBody(textMask.M, textMask.w, textMask.h, textMask.px, 0, -p.strip, p.base, p.base + p.textH) : null;
-  return { base, gray: mergeBodies(gray), accent: mergeBodies([...yellow, text]), water: water };
+  add(A.water, hfBody(Zc, Ut, nx, ny, xs, ys));
+  add(A.trail, hfBody(TL, TU, nx, ny, xs, ys));
+  add(A.poi, mergeBodies(prisms.map(pr => prismBody(pr.shape, pr.X, pr.Y, pr.R, pr.z0, pr.z1))));
+  add(A.base, boxBody(0, p.printW, -p.strip, p.printD, 0, p.base));
+  if (textMask) add(A.text, pixelBody(textMask.M, textMask.w, textMask.h, textMask.px, 0, -p.strip, p.base, p.base + p.textH));
+  return [...out].map(([fil, list]) => ({ fil, body: mergeBodies(list) }));
 }
 
 function checkBody(b) {
@@ -309,6 +665,88 @@ function checkBody(b) {
     vol += (V[a] * (V[bb + 1] * V[c + 2] - V[bb + 2] * V[c + 1]) - V[a + 1] * (V[bb] * V[c + 2] - V[bb + 2] * V[c]) + V[a + 2] * (V[bb] * V[c + 1] - V[bb + 1] * V[c])) / 6;
   }
   return { tris: F.length / 3, open, nm, vol };
+}
+
+// ---- color helpers ----
+const hex2rgb = h => { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+const rgb2hex = c => '#' + c.slice(0, 3).map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
+function rgb2lab(r, g, b) {
+  const f = v => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+  const R = f(r), Gg = f(g), B = f(b);
+  const g3 = t => t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116;
+  const x = g3((R * 0.4124 + Gg * 0.3576 + B * 0.1805) / 0.95047), y = g3(R * 0.2126 + Gg * 0.7152 + B * 0.0722), z = g3((R * 0.0193 + Gg * 0.1192 + B * 0.9505) / 1.08883);
+  return [116 * y - 16, 500 * (x - y), 200 * (y - z)];
+}
+// per-cell RGB from an imagery sampler (Uint8Array cw*ch*3)
+function imageryCells(p, m, sample) {
+  const { nx, ny, dx, dy, scale, areaKmY } = m, cw = nx - 1, ch = ny - 1, kl = kmLon(p.lat);
+  const out = new Uint8Array(cw * ch * 3), tmp = [0, 0, 0];
+  for (let r = 0; r < ch; r++) {
+    const lat = p.lat + ((r + 0.5) * dy / scale - areaKmY / 2) / KM_LAT;
+    for (let c = 0; c < cw; c++) {
+      sample(lat, p.lon + ((c + 0.5) * dx / scale - p.areaKm / 2) / kl, tmp);
+      const o = (r * cw + c) * 3; out[o] = tmp[0]; out[o + 1] = tmp[1]; out[o + 2] = tmp[2];
+    }
+  }
+  return out;
+}
+function adjustColors(px, autoLevels, sat) {
+  const out = new Uint8Array(px.length), n = px.length / 3;
+  const lo = [0, 0, 0], hi = [255, 255, 255];
+  if (autoLevels) for (let ch = 0; ch < 3; ch++) {
+    const h = new Uint32Array(256); for (let i = 0; i < n; i++) h[px[i * 3 + ch]]++;
+    let s = 0, a = 0; while (a < 255 && (s += h[a]) < n * 0.01) a++;
+    s = 0; let b = 255; while (b > 0 && (s += h[b]) < n * 0.01) b--;
+    if (b - a > 10) { lo[ch] = a; hi[ch] = b; }
+  }
+  for (let i = 0; i < n; i++) {
+    const v = [0, 1, 2].map(ch => (px[i * 3 + ch] - lo[ch]) * 255 / (hi[ch] - lo[ch]));
+    const l = 0.299 * v[0] + 0.587 * v[1] + 0.114 * v[2];
+    for (let ch = 0; ch < 3; ch++) out[i * 3 + ch] = Math.max(0, Math.min(255, Math.round(l + (v[ch] - l) * sat)));
+  }
+  return out;
+}
+// nearest palette entry per cell (palette: [{id, lab}]) + cleanup
+function quantizeCells(px, palette, cw, ch, cleanup) {
+  const C = new Int16Array(cw * ch), cache = new Map();
+  for (let i = 0; i < cw * ch; i++) {
+    const r = px[i * 3], g = px[i * 3 + 1], b = px[i * 3 + 2], key = (r >> 2) << 12 | (g >> 2) << 6 | (b >> 2);
+    let id = cache.get(key);
+    if (id === undefined) {
+      const L = rgb2lab(r, g, b); let best = Infinity;
+      for (const q of palette) { const d = (L[0] - q.lab[0]) ** 2 + (L[1] - q.lab[1]) ** 2 + (L[2] - q.lab[2]) ** 2; if (d < best) { best = d; id = q.id; } }
+      cache.set(key, id);
+    }
+    C[i] = id;
+  }
+  if (cleanup > 0) majority(C, cw, ch, cleanup);
+  return C;
+}
+function kmeans(px, k, iters = 15) {
+  const n = px.length / 3, step = Math.max(1, Math.floor(n / 20000)), S = [];
+  for (let i = 0; i < n; i += step) S.push([px[i * 3], px[i * 3 + 1], px[i * 3 + 2], ...rgb2lab(px[i * 3], px[i * 3 + 1], px[i * 3 + 2])]);
+  const cen = [S[(S.length / 2) | 0].slice(3)];
+  while (cen.length < k) {   // farthest-point init
+    let bi = 0, bd = -1;
+    for (let i = 0; i < S.length; i++) { let d = Infinity; for (const c of cen) d = Math.min(d, (S[i][3] - c[0]) ** 2 + (S[i][4] - c[1]) ** 2 + (S[i][5] - c[2]) ** 2); if (d > bd) { bd = d; bi = i; } }
+    cen.push(S[bi].slice(3));
+  }
+  let as = new Int32Array(S.length), rgb = [];
+  for (let it = 0; it < iters; it++) {
+    for (let i = 0; i < S.length; i++) { let bd = Infinity; for (let c = 0; c < k; c++) { const d = (S[i][3] - cen[c][0]) ** 2 + (S[i][4] - cen[c][1]) ** 2 + (S[i][5] - cen[c][2]) ** 2; if (d < bd) { bd = d; as[i] = c; } } }
+    const sum = Array.from({ length: k }, () => [0, 0, 0, 0, 0, 0, 0]);
+    for (let i = 0; i < S.length; i++) { const s = sum[as[i]]; for (let j = 0; j < 6; j++) s[j] += S[i][j]; s[6]++; }
+    rgb = sum.map((s, c) => { if (s[6]) cen[c] = [s[3] / s[6], s[4] / s[6], s[5] / s[6]]; return s[6] ? [s[0] / s[6], s[1] / s[6], s[2] / s[6], s[6]] : [128, 128, 128, 0]; });
+  }
+  return rgb.filter(c => c[3] > 0).sort((a, b) => (0.3 * a[0] + 0.59 * a[1] + 0.11 * a[2]) - (0.3 * b[0] + 0.59 * b[1] + 0.11 * b[2]));
+}
+function colorName([r, g, b]) {
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 510, s = mx === mn ? 0 : (mx - mn) / (255 - Math.abs(mx + mn - 255));
+  let h = 0; if (mx !== mn) { h = mx === r ? ((g - b) / (mx - mn)) % 6 : mx === g ? (b - r) / (mx - mn) + 2 : (r - g) / (mx - mn) + 4; h = (h * 60 + 360) % 360; }
+  const tone = l < 0.22 ? 'Dark ' : l > 0.72 ? 'Light ' : '';
+  if (s < 0.14) return l > 0.85 ? 'White' : l < 0.15 ? 'Black' : tone + 'gray';
+  const hue = h < 20 ? 'red' : h < 45 ? (l < 0.45 ? 'brown' : 'tan') : h < 70 ? (s < 0.45 ? 'olive' : 'yellow') : h < 160 ? 'green' : h < 200 ? 'teal' : h < 260 ? 'blue' : h < 320 ? 'purple' : 'red';
+  return (tone + hue).replace(/^./, c => c.toUpperCase());
 }
 
 // ---- writers ----
@@ -337,7 +775,7 @@ function build3MF(parts, p, title) {   // parts: [{name, body, tool}]
   let main = `<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" xml:lang="en-US" ${NS}>\n<metadata name="Application">BambuStudio-01.10.02.76</metadata>\n<metadata name="BambuStudio:3mfVersion">1</metadata>\n<metadata name="Title">${esc(title)}</metadata>\n<resources>\n<object id="${gid}" p:UUID="${uuid()}" type="model"><components>\n`;
   parts.forEach((pt, i) => { main += `<component p:path="/3D/Objects/object_1.model" objectid="${i + 1}" p:UUID="${uuid()}" transform="${I}"/>\n`; });
   main += `</components></object>\n</resources>\n<build p:UUID="${uuid()}"><item objectid="${gid}" p:UUID="${uuid()}" transform="1 0 0 0 1 0 0 0 1 ${tx} ${ty} 0" printable="1"/></build>\n</model>\n`;
-  let cfg = `<?xml version="1.0" encoding="UTF-8"?>\n<config>\n  <object id="${gid}">\n    <metadata key="name" value="${esc(title)}"/>\n    <metadata key="extruder" value="${parts[1] ? parts[1].tool : 1}"/>\n`;
+  let cfg = `<?xml version="1.0" encoding="UTF-8"?>\n<config>\n  <object id="${gid}">\n    <metadata key="name" value="${esc(title)}"/>\n    <metadata key="extruder" value="${parts[0] ? parts[0].tool : 1}"/>\n`;
   parts.forEach((pt, i) => { cfg += `    <part id="${i + 1}" subtype="normal_part">\n      <metadata key="name" value="${esc(pt.name)}"/>\n      <metadata key="matrix" value="1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"/>\n      <metadata key="extruder" value="${pt.tool}"/>\n    </part>\n`; });
   cfg += `  </object>\n  <plate>\n    <metadata key="plater_id" value="1"/>\n    <metadata key="plater_name" value=""/>\n    <metadata key="locked" value="false"/>\n    <model_instance>\n      <metadata key="object_id" value="${gid}"/>\n      <metadata key="instance_id" value="0"/>\n      <metadata key="identify_id" value="1"/>\n    </model_instance>\n  </plate>\n  <assemble>\n   <assemble_item object_id="${gid}" instance_id="0" transform="1 0 0 0 1 0 0 0 1 ${tx} ${ty} 0" offset="0 0 0" />\n  </assemble>\n</config>\n`;
   return {
@@ -371,17 +809,16 @@ function buildSTL(body, name) {
 
 
 const $ = id => document.getElementById(id);
+const mk = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const statusEl = $('status');
 const setStatus = (t, err) => { statusEl.textContent = t; statusEl.className = err ? 'err' : ''; if ($('busy').classList.contains('on') && !err) $('busy').textContent = t; };
 const busy = (on, t) => { $('busy').classList.toggle('on', on); if (t) $('busy').textContent = t; };
 const nextFrame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
 
-for (const id of ['tAccent', 'tGray', 'tWater', 'tBase']) for (let i = 1; i <= 8; i++) $(id).add(new Option('T' + i, i));
-$('tAccent').value = 1; $('tGray').value = 2; $('tWater').value = 3; $('tBase').value = 4;
-
 // ---------- params ----------
-const NUM = ['areaKm','printW','printD','bed','pitch','vex','base','floor','smooth','interval','firstContour','sheetLayers','layer','riverW','carve','strip','textH','textScale'];
-const SAVE = [...NUM, 'addrLabel', 'coords','line1','line2','wRivers','wStreams','wLakes','cAccent','cGray','cWater','cBase','tAccent','tGray','tWater','tBase'];
+const NUM = ['areaKm','printW','printD','bed','pitch','vex','base','floor','smooth','interval','firstContour','sheetLayers','layer','riverW','streamW','carve','recess','minLake','trailW','trailH','trailDepth','poiSize','poiH','osmMax','strip','textH','textScale'];
+const BOOL = ['wRivers','wStreams','wLakes','wRiverAreas','wFlat','wFlow','wWidthTag'];
+const SAVE = [...NUM, ...BOOL, 'addrLabel','coords','line1','line2','trailMode','poiShape','wptPoi','poiNames'];
 let line2Auto = true;
 try { const s = JSON.parse(localStorage.getItem('reliefMaker') || 'null'); if (s) { for (const k of SAVE) if (k in s && $(k)) { const el = $(k); if (el.type === 'checkbox') el.checked = s[k]; else el.value = s[k]; } line2Auto = s.line2Auto !== false; } } catch (e) {}
 function save() { try { const s = { line2Auto }; for (const k of SAVE) { const el = $(k); s[k] = el.type === 'checkbox' ? el.checked : el.value; } localStorage.setItem('reliefMaker', JSON.stringify(s)); } catch (e) {} }
@@ -401,8 +838,10 @@ const dm = (v, pos, neg) => { const a = Math.abs(v), d = Math.floor(a), m = Math
 
 function params() {
   const p = {}; for (const k of NUM) p[k] = parseFloat($(k).value) || 0;
+  for (const k of BOOL) p[k] = $(k).checked;
   const c = parseCoords($('coords').value) || [47.115, 15.45]; p.lat = c[0]; p.lon = c[1];
-  p.recess = 0.2; p.pitch = Math.max(0.3, p.pitch); p.layer = Math.max(0.05, p.layer); p.areaKm = Math.max(0.5, p.areaKm);
+  p.trailMode = $('trailMode').value;
+  p.pitch = Math.max(0.3, p.pitch); p.layer = Math.max(0.05, p.layer); p.areaKm = Math.max(0.5, p.areaKm);
   if (p.strip > 0 && p.strip < 6) p.strip = 6;
   return p;
 }
@@ -413,23 +852,314 @@ if (line2Auto || !$('line2').value) { line2Auto = true; updateLine2(); }
 for (const el of document.querySelectorAll('.rng')) {
   const r = el.querySelector('input'), o = el.querySelector('output');
   const f = () => o.textContent = (+r.value).toFixed(r.step < 1 ? (r.step < 0.1 ? 2 : 1) : 0) + (r.id === 'vex' ? '×' : '');
-  r.addEventListener('input', f); f();
+  r._fmt = f; r.addEventListener('input', f); f();
 }
+function trailRows() { const inl = $('trailMode').value === 'inlay'; $('rowTrailH').classList.toggle('hide', inl); $('rowTrailD').classList.toggle('hide', !inl); }
+$('trailMode').addEventListener('change', trailRows); trailRows();
+
+// ---------- colors & filaments ----------
+// Two palettes: "custom" (contour lines / elevation bands) = exactly 4 filaments; "real" (satellite) = open-ended list.
+const PRESETS = {
+  classic: { mode: 'contour', fils: [['Black', '#17181b', 4], ['Gray', '#a3a6aa', 2], ['Yellow', '#f6c21c', 1], ['Cyan', '#5fc3d6', 3]],
+    asg: { base: 0, core: 0, terrain: 1, text: 2, water: 3, trail: 2, poi: 2, rock: -1 }, bands: [[1, 1]] },
+  alpine4: { mode: 'bands', fils: [['Dark green', '#2f5a2c', 1], ['Olive', '#9ea53a', 2], ['Light gray', '#c9c9c4', 3], ['Blue', '#2f6fd0', 4]],
+    asg: { base: 0, core: 0, terrain: 1, text: 2, water: 3, trail: 2, poi: 2, rock: 2 }, bands: [[0, 0.42], [1, 0.82], [2, 1]], slope: 40 },
+  gold4: { mode: 'bands', fils: [['Forest green', '#2e4a2a', 1], ['Stone', '#b9b8b0', 2], ['Gold', '#d6a21e', 3], ['Lake blue', '#2c6bd6', 4]],
+    asg: { base: 0, core: 0, terrain: 0, text: 2, water: 3, trail: 2, poi: 2, rock: 1 }, bands: [[0, 0.62], [1, 1]], slope: 36 },
+  snow4: { mode: 'bands', fils: [['Charcoal', '#2b2d31', 1], ['Rock gray', '#8f908c', 2], ['Snow white', '#f3f3ef', 3], ['Trail red', '#e2342b', 4]],
+    asg: { base: 0, core: 0, terrain: 1, text: 3, water: 0, trail: 3, poi: 3, rock: 1 }, bands: [[1, 0.7], [2, 1]], slope: 45 },
+  satellite: { mode: 'real', fils: [['Black', '#1b1c1e', 1, 0], ['Dark forest', '#2c3d25', 2], ['Green', '#4f6b35', 3], ['Olive', '#8c8a55', 4], ['Earth brown', '#7a6248', 5], ['Rock gray', '#9a9890', 6], ['Snow white', '#eeeeea', 7], ['Water blue', '#24548f', 8, 0], ['Trail orange', '#f07a1a', 9, 0]],
+    asg: { base: 0, core: 0, text: 6, water: 7, trail: 8, poi: 8 } },
+};
+function presetPal(key, hmin = 300, hmax = 2000) {
+  const P = PRESETS[key], off = P.mode === 'real' ? 101 : 1;
+  const fils = P.fils.map((f, i) => ({ id: off + i, name: f[0], color: f[1], tool: f[2], real: f[3] !== 0 }));
+  const id = k => k < 0 ? -1 : fils[k].id, asg = {};
+  for (const k in P.asg) asg[k] = id(P.asg[k]);
+  const pal = { fils, asg, next: off + fils.length };
+  if (P.bands) { pal.bands = P.bands.map(([f, fr]) => ({ fil: id(f), upTo: Math.round(hmin + (hmax - hmin) * fr) })); pal.slopeDeg = P.slope || 35; }
+  return pal;
+}
+let COL = null;
+try { COL = JSON.parse(localStorage.getItem('reliefMakerColors2') || 'null'); } catch (e) {}
+if (!COL || !COL.custom || !COL.real || COL.custom.fils.length !== 4)
+  COL = { mode: 'bands', custom: presetPal('alpine4', 350, 1450), real: presetPal('satellite'), skin: 0.6, imgSrc: 'esri', autoLevels: true, sat: 1.3, cleanup: 2, realContours: false, kN: 6 };
+const PAL = () => COL.mode === 'real' ? COL.real : COL.custom;
+const filById = id => PAL().fils.find(f => f.id === +id);
+const filColor = id => (filById(id) || { color: '#888888' }).color;
+function saveCOL() { try { localStorage.setItem('reliefMakerColors2', JSON.stringify(COL)); } catch (e) {} }
+function fixRefs() {
+  for (const pal of [COL.custom, COL.real]) {
+    const ok = id => pal.fils.some(f => f.id === +id), f0 = pal.fils[0].id;
+    for (const k of ['base', 'core', 'text', 'water', 'trail', 'poi', 'terrain']) if (!ok(pal.asg[k])) pal.asg[k] = f0;
+    if (pal.bands) {
+      if (!(+pal.asg.rock === -1 || ok(pal.asg.rock))) pal.asg.rock = -1;
+      for (const b of pal.bands) if (!ok(b.fil)) b.fil = f0;
+      if (!pal.bands.length) pal.bands.push({ fil: pal.asg.terrain, upTo: 9999 });
+    }
+  }
+}
+function colorsChanged(rerender) { fixRefs(); saveCOL(); if (rerender) renderColors(); schedule(); }
+
+function filSelect(value, onChange, none) {
+  const s = mk('select');
+  if (none) s.add(new Option('— off —', -1));
+  for (const f of PAL().fils) s.add(new Option(`${f.name} (T${f.tool})`, f.id));
+  s.value = value; s.addEventListener('change', () => onChange(+s.value));
+  return s;
+}
+function renderColors() {
+  const real = COL.mode === 'real', pal = PAL();
+  $('filTitle').textContent = real ? 'Realistic filaments' : 'Your 4 filaments';
+  $('filHint').textContent = real
+    ? 'Satellite colors are matched to the filaments ticked "R". Add as many as your printer can handle — tool numbers go up to T16, so an entry can also point at a mixed/virtual filament slot in your slicer.'
+    : 'Contour lines and elevation bands always use exactly these 4. Name them after your real spools and set the tool each one is loaded in.';
+  $('filTools').classList.toggle('hide', !real);
+  const fl = $('filList'); fl.innerHTML = '';
+  for (const f of pal.fils) {
+    const col = mk('input', { type: 'color', value: f.color, title: 'Preview color' });
+    col.addEventListener('input', () => { f.color = col.value; colorsChanged(false); });
+    const nm = mk('input', { type: 'text', value: f.name, placeholder: 'Filament name' });
+    nm.addEventListener('input', () => { f.name = nm.value; saveCOL(); });
+    nm.addEventListener('change', () => renderColors());
+    const tool = mk('select'); for (let i = 1; i <= 16; i++) tool.add(new Option('T' + i, i)); tool.value = f.tool;
+    tool.addEventListener('change', () => { f.tool = +tool.value; colorsChanged(true); });
+    const row = mk('div', { className: 'item' }, col, nm, tool);
+    if (real) {
+      const rcb = mk('input', { type: 'checkbox', checked: f.real }); rcb.addEventListener('change', () => { f.real = rcb.checked; colorsChanged(false); });
+      const del = mk('button', { type: 'button', className: 'ib x', textContent: '×', title: 'Remove filament' });
+      del.addEventListener('click', () => { if (pal.fils.length < 2) return; pal.fils = pal.fils.filter(x => x !== f); colorsChanged(true); });
+      row.append(mk('label', { className: 'r', title: 'Use for the satellite surface' }, rcb, 'R'), del);
+    }
+    fl.append(row);
+  }
+  for (const s of document.querySelectorAll('select.fsel')) {
+    const key = s.dataset.asg; s.innerHTML = '';
+    if (s.dataset.none) s.add(new Option('— off —', -1));
+    for (const f of pal.fils) s.add(new Option(`${f.name} (T${f.tool})`, f.id));
+    s.value = pal.asg[key] ?? (s.dataset.none ? -1 : pal.fils[0].id);
+    s.onchange = () => { PAL().asg[key] = +s.value; colorsChanged(key === 'rock'); };
+  }
+  const C = COL.custom, bl = $('bandList'); bl.innerHTML = '';
+  C.bands.sort((a, b) => a.upTo - b.upTo);
+  C.bands.forEach((b, k) => {
+    const last = k === C.bands.length - 1;
+    const sel = filSelect(b.fil, v => { b.fil = v; colorsChanged(false); }); sel.style.flex = '1';
+    const up = last ? mk('span', { className: 'meta', textContent: 'and above' }) : mk('input', { type: 'number', value: b.upTo, step: 10, title: 'Up to (m)' });
+    if (!last) up.addEventListener('change', () => { b.upTo = +up.value; colorsChanged(true); });
+    const del = mk('button', { type: 'button', className: 'ib x', textContent: '×' });
+    del.addEventListener('click', () => { if (C.bands.length < 2) return; C.bands.splice(k, 1); colorsChanged(true); });
+    bl.append(mk('div', { className: 'item' }, sel, last ? '' : mk('span', { className: 'meta', textContent: 'up to' }), up, last ? '' : mk('span', { className: 'meta', textContent: 'm' }), del));
+  });
+  $('colMode').value = COL.mode; $('slopeDeg').value = C.slopeDeg;
+  for (const id of ['skin', 'imgSrc', 'sat', 'cleanup', 'kN']) $(id).value = COL[id];
+  for (const id of ['autoLevels', 'realContours']) $(id).checked = COL[id];
+  for (const r of document.querySelectorAll('#pReal .rng input')) r._fmt();
+  $('pContour').classList.toggle('hide', COL.mode !== 'contour');
+  $('pBands').classList.toggle('hide', COL.mode !== 'bands');
+  $('pReal').classList.toggle('hide', !real);
+  $('rowTerrainCore').classList.toggle('hide', COL.mode === 'contour');
+  $('pSkin').classList.toggle('hide', !(real || (COL.mode === 'bands' && +C.asg.rock >= 0)));
+}
+$('colMode').addEventListener('change', () => { COL.mode = $('colMode').value; colorsChanged(true); if (COL.mode === 'real') ensureImagery().catch(() => {}); });
+$('slopeDeg').addEventListener('input', () => { COL.custom.slopeDeg = +$('slopeDeg').value; colorsChanged(false); });
+for (const id of ['skin', 'sat', 'cleanup', 'kN']) $(id).addEventListener('input', () => { COL[id] = +$(id).value; colorsChanged(false); });
+for (const id of ['autoLevels', 'realContours']) $(id).addEventListener('change', () => { COL[id] = $(id).checked; colorsChanged(false); });
+$('imgSrc').addEventListener('change', () => { COL.imgSrc = $('imgSrc').value; colorsChanged(false); ensureImagery().catch(() => {}); });
+$('filAdd').addEventListener('click', () => { const R = COL.real, t = Math.min(16, Math.max(0, ...R.fils.map(f => f.tool)) + 1); R.fils.push({ id: R.next++, name: 'New filament', color: '#888888', tool: t, real: true }); colorsChanged(true); });
+$('filSort').addEventListener('click', () => { PAL().fils.sort((a, b) => a.tool - b.tool); colorsChanged(true); });
+$('preset').addEventListener('change', () => {
+  const k = $('preset').value; if (!k) return;
+  const m = state.lastModel, pal = presetPal(k, m ? m.hmin : 350, m ? m.hmax : 1450);
+  if (PRESETS[k].mode === 'real') COL.real = pal; else COL.custom = pal;
+  COL.mode = PRESETS[k].mode;
+  $('preset').value = ''; colorsChanged(true); if (COL.mode === 'real') ensureImagery().catch(() => {});
+});
+$('bandAdd').addEventListener('click', () => {
+  const C = COL.custom, m = state.lastModel, top = C.bands.length > 1 ? C.bands[C.bands.length - 2].upTo : (m ? m.hmin : 300);
+  C.bands.splice(C.bands.length - 1, 0, { fil: C.fils[0].id, upTo: Math.round(top + (m ? (m.hmax - top) / 2 : 300)) });
+  colorsChanged(true);
+});
+$('bandAuto').addEventListener('click', () => {
+  const m = state.lastModel; if (!m) { setStatus('Load terrain first.', true); return; }
+  const B = COL.custom.bands, n = B.length; B.forEach((b, k) => { b.upTo = k === n - 1 ? 99999 : Math.round(m.hmin + (m.hmax - m.hmin) * (k + 1) / n); });
+  colorsChanged(true);
+});
+$('kBtn').addEventListener('click', async () => {
+  try {
+    await ensureImagery(); const p = params(), R = COL.real;
+    const m = computeModel(p, state.dem, null, Math.max(p.pitch, Math.sqrt(p.printW * p.printD / 60000)));
+    const px = adjustColors(imageryCells(p, m, state.img.sample), COL.autoLevels, COL.sat);
+    const cen = kmeans(px, Math.max(2, Math.min(12, COL.kN)));
+    const keep = new Set(Object.values(R.asg).map(Number));
+    R.fils = R.fils.filter(f => !f.real || keep.has(f.id));
+    let t = Math.max(0, ...R.fils.map(f => f.tool));
+    for (const c of cen) R.fils.push({ id: R.next++, name: colorName(c), color: rgb2hex(c), tool: Math.min(16, ++t), real: true });
+    colorsChanged(true);
+    setStatus(`Created ${cen.length} filaments from the imagery — rename them to your spools and match the tools.`);
+  } catch (e) { console.error(e); setStatus(e.message, true); }
+});
 
 // ---------- map ----------
 const map = L.map('map', { zoomControl: true, attributionControl: false });
 L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 17 }).addTo(map);
-const rect = L.rectangle([[0, 0], [0, 0]], { color: '#f6c21c', weight: 2, fillOpacity: 0.08 }).addTo(map);
-const marker = L.circleMarker([0, 0], { radius: 4, color: '#f6c21c' }).addTo(map);
+const rect = L.rectangle([[0, 0], [0, 0]], { color: '#f6c21c', weight: 2, fillOpacity: 0.06, interactive: false }).addTo(map);
+const marker = L.circleMarker([0, 0], { radius: 4, color: '#f6c21c', interactive: false }).addTo(map);
+const featLayer = L.layerGroup().addTo(map);
+const drawLine = L.polyline([], { color: '#ff3b2f', weight: 3, dashArray: '5 5' }).addTo(map);
 function areaBounds(p) { const { areaKmY } = geom(p); const dLat = areaKmY / 2 / KM_LAT, dLon = p.areaKm / 2 / kmLon(p.lat); return [[p.lat - dLat, p.lon - dLon], [p.lat + dLat, p.lon + dLon]]; }
 function updateMap(fit) { const p = params(); const b = areaBounds(p); rect.setBounds(b); marker.setLatLng([p.lat, p.lon]); if (fit) map.fitBounds(b, { padding: [10, 10] }); }
 updateMap(true);
-map.on('click', e => { $('coords').value = `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`; onLocationChange(); });
+
+let mapMode = 'center', drawPts = [];
+const HINTS = { center: 'Click the map to set the center of the print.', trail: 'Click along your route. Double-click or "Finish trail" when done.', poi: 'Click the map to drop a POI marker (shape from the POI section).' };
+function setMapMode(m) {
+  mapMode = m;
+  for (const b of $('modeSeg').children) b.classList.toggle('on', b.dataset.mode === m);
+  $('drawBar').style.display = m === 'trail' ? 'grid' : 'none'; $('modeHint').textContent = HINTS[m];
+  map.getContainer().style.cursor = m === 'center' ? '' : 'crosshair';
+  if (m === 'trail') map.doubleClickZoom.disable(); else { map.doubleClickZoom.enable(); drawPts = []; drawLine.setLatLngs([]); }
+}
+for (const b of $('modeSeg').children) b.addEventListener('click', () => setMapMode(b.dataset.mode));
+function finishTrail() {
+  const pts = drawPts.filter((q, i) => !i || q[0] !== drawPts[i - 1][0] || q[1] !== drawPts[i - 1][1]);
+  if (pts.length < 2) { setStatus('A trail needs at least two points.', true); return; }
+  FEAT.trails.push({ id: FEAT.next++, name: `Trail ${FEAT.trails.length + 1}`, segs: [pts], on: true });
+  drawPts = []; drawLine.setLatLngs([]); featsChanged(); setStatus('Trail added.');
+}
+$('drawUndo').addEventListener('click', () => { drawPts.pop(); drawLine.setLatLngs(drawPts); });
+$('drawDone').addEventListener('click', finishTrail);
+map.on('click', e => {
+  const lat = +e.latlng.lat.toFixed(6), lon = +e.latlng.lng.toFixed(6);
+  if (mapMode === 'center') { $('coords').value = `${lat.toFixed(5)}, ${lon.toFixed(5)}`; onLocationChange(); }
+  else if (mapMode === 'trail') { drawPts.push([lat, lon]); drawLine.setLatLngs(drawPts); }
+  else addPois([{ name: `POI ${FEAT.pois.length + 1}`, lat, lon }]);
+});
+map.on('dblclick', () => { if (mapMode === 'trail') finishTrail(); });
+
+// ---------- trails & POIs ----------
+let FEAT = { trails: [], pois: [], next: 1 };
+try { const s = JSON.parse(localStorage.getItem('reliefMakerFeat') || 'null'); if (s && s.trails) FEAT = s; } catch (e) {}
+function saveFeat() { try { localStorage.setItem('reliefMakerFeat', JSON.stringify(FEAT)); } catch (e) { setStatus('Browser storage is full — trails/POIs will not survive a reload.', true); } }
+function featsChanged(relist = true) { saveFeat(); drawFeatures(); if (relist) renderFeatLists(); schedule(); }
+const trailKm = t => { let s = 0; for (const seg of t.segs) for (let i = 1; i < seg.length; i++) { const a = seg[i - 1], b = seg[i]; s += Math.hypot((b[0] - a[0]) * KM_LAT, (b[1] - a[1]) * kmLon(a[0])); } return s; };
+function drawFeatures() {
+  featLayer.clearLayers();
+  for (const t of FEAT.trails) for (const s of t.segs) L.polyline(s, t.on ? { color: '#ff3b2f', weight: 3 } : { color: '#ff3b2f', weight: 1.5, opacity: 0.45, dashArray: '3 5' }).bindTooltip(t.name).addTo(featLayer);
+  for (const q of FEAT.pois) L.circleMarker([q.lat, q.lon], { radius: 5, color: '#fff', weight: 1.5, fillColor: q.on ? '#ff3b2f' : '#777', fillOpacity: 1 }).bindTooltip(q.name).addTo(featLayer);
+}
+const SHAPES = [['tri', '▲'], ['dot', '●'], ['ring', '◯'], ['square', '■'], ['diamond', '◆'], ['star', '★']];
+function renderFeatLists() {
+  const tl = $('trailList'); tl.innerHTML = '';
+  if (!FEAT.trails.length) tl.append(mk('div', { className: 'empty', textContent: 'No trails yet.' }));
+  for (const t of FEAT.trails) {
+    const cb = mk('input', { type: 'checkbox', checked: t.on, title: 'Print this trail' }); cb.addEventListener('change', () => { t.on = cb.checked; featsChanged(false); });
+    const nm = mk('input', { type: 'text', value: t.name }); nm.addEventListener('input', () => { t.name = nm.value; saveFeat(); drawFeatures(); });
+    const fit = mk('button', { type: 'button', className: 'ib', textContent: '⌖', title: 'Fit the print area to this trail' }); fit.addEventListener('click', () => fitTo(t.segs.flat()));
+    const del = mk('button', { type: 'button', className: 'ib x', textContent: '×' }); del.addEventListener('click', () => { FEAT.trails = FEAT.trails.filter(x => x !== t); featsChanged(); });
+    tl.append(mk('div', { className: 'item' }, cb, nm, mk('span', { className: 'meta', textContent: trailKm(t).toFixed(1) + ' km' }), fit, del));
+  }
+  const pl = $('poiList'); pl.innerHTML = '';
+  if (!FEAT.pois.length) pl.append(mk('div', { className: 'empty', textContent: 'No POIs yet.' }));
+  for (const q of FEAT.pois) {
+    const cb = mk('input', { type: 'checkbox', checked: q.on }); cb.addEventListener('change', () => { q.on = cb.checked; featsChanged(false); });
+    const nm = mk('input', { type: 'text', value: q.name }); nm.addEventListener('input', () => { q.name = nm.value; saveFeat(); drawFeatures(); schedule(); });
+    const sh = mk('select'); for (const [v, l] of SHAPES) sh.add(new Option(l, v)); sh.value = q.shape; sh.addEventListener('change', () => { q.shape = sh.value; featsChanged(false); });
+    const del = mk('button', { type: 'button', className: 'ib x', textContent: '×' }); del.addEventListener('click', () => { FEAT.pois = FEAT.pois.filter(x => x !== q); featsChanged(); });
+    pl.append(mk('div', { className: 'item' }, cb, nm, sh, del));
+  }
+}
+function addPois(list, shape) {
+  for (const q of list) {
+    if (FEAT.pois.some(x => Math.abs(x.lat - q.lat) < 1e-5 && Math.abs(x.lon - q.lon) < 1e-5)) continue;
+    FEAT.pois.push({ id: FEAT.next++, name: q.name || 'POI', lat: +q.lat.toFixed(6), lon: +q.lon.toFixed(6), shape: q.shape || shape || $('poiShape').value, on: true });
+  }
+  featsChanged();
+}
+$('poiClear').addEventListener('click', () => { if (FEAT.pois.length && confirm(`Remove all ${FEAT.pois.length} POIs?`)) { FEAT.pois = []; featsChanged(); } });
+function fitTo(pts) {
+  let s = 90, n = -90, w = 180, e = -180;
+  for (const [la, lo] of pts) { s = Math.min(s, la); n = Math.max(n, la); w = Math.min(w, lo); e = Math.max(e, lo); }
+  const lat = (s + n) / 2, lon = (w + e) / 2, p = params();
+  const area = Math.max((e - w) * kmLon(lat), (n - s) * KM_LAT * p.printW / p.printD) * 1.15;
+  $('coords').value = `${lat.toFixed(5)}, ${lon.toFixed(5)}`; $('areaKm').value = Math.max(1, Math.min(200, area)).toFixed(1);
+  onLocationChange();
+}
+
+// --- track file import ---
+function decimate(pts, minM = 4) {
+  pts = pts.filter(q => isFinite(q[0]) && isFinite(q[1]) && Math.abs(q[0]) <= 90);
+  if (pts.length < 3) return pts.map(q => [+q[0].toFixed(6), +q[1].toFixed(6)]);
+  const out = [pts[0]];
+  for (let i = 1; i < pts.length - 1; i++) { const a = out[out.length - 1], b = pts[i]; if (Math.hypot((b[0] - a[0]) * 111200, (b[1] - a[1]) * 111320 * Math.cos(a[0] * Math.PI / 180)) >= minM) out.push(b); }
+  out.push(pts[pts.length - 1]);
+  return out.map(q => [+q[0].toFixed(6), +q[1].toFixed(6)]);
+}
+const kmlCoords = t => (t || '').trim().split(/\s+/).map(x => x.split(',').map(Number)).filter(a => a.length >= 2).map(a => [a[1], a[0]]);
+function parseTrackFile(text, fname) {
+  const res = { trails: [], pois: [] }, s = text.trim();
+  const addT = (name, segs) => { segs = segs.map(sg => decimate(sg)).filter(sg => sg.length >= 2); if (segs.length) res.trails.push({ name: name || fname, segs }); };
+  const addP = (name, lat, lon) => { if (isFinite(lat) && isFinite(lon)) res.pois.push({ name: name || 'Waypoint', lat, lon }); };
+  if (s[0] === '{' || s[0] === '[') {
+    const j = JSON.parse(s), ll = c => [c[1], c[0]];
+    const feats = j.type === 'FeatureCollection' ? j.features : j.type === 'Feature' ? [j] : [{ geometry: j, properties: {} }];
+    for (const f of feats) {
+      const g = f.geometry, pr = f.properties || {}, nm = pr.name || pr.title; if (!g) continue;
+      if (g.type === 'LineString') addT(nm, [g.coordinates.map(ll)]);
+      else if (g.type === 'MultiLineString') addT(nm, g.coordinates.map(l => l.map(ll)));
+      else if (g.type === 'Point') addP(nm, g.coordinates[1], g.coordinates[0]);
+      else if (g.type === 'MultiPoint') g.coordinates.forEach(c => addP(nm, c[1], c[0]));
+    }
+    return res;
+  }
+  const doc = new DOMParser().parseFromString(s, 'application/xml');
+  if (doc.getElementsByTagName('parsererror').length) throw new Error(`${fname}: not a valid GPX/KML file`);
+  const T = (el, n) => [...el.getElementsByTagNameNS('*', n)];
+  const nameOf = el => { const c = [...el.children].find(x => x.localName === 'name'); return c ? c.textContent.trim() : ''; };
+  const pt = e => [+e.getAttribute('lat'), +e.getAttribute('lon')];
+  const root = doc.documentElement.localName.toLowerCase();
+  if (root === 'gpx') {
+    for (const trk of T(doc, 'trk')) addT(nameOf(trk), T(trk, 'trkseg').map(sg => T(sg, 'trkpt').map(pt)));
+    for (const rte of T(doc, 'rte')) addT(nameOf(rte), [T(rte, 'rtept').map(pt)]);
+    for (const w of T(doc, 'wpt')) { const [la, lo] = pt(w); addP(nameOf(w), la, lo); }
+  } else if (root === 'kml') {
+    for (const pm of T(doc, 'Placemark')) {
+      const nm = nameOf(pm);
+      const segs = [...T(pm, 'LineString').map(ls => kmlCoords(T(ls, 'coordinates')[0]?.textContent)),
+        ...T(pm, 'Track').map(tr => T(tr, 'coord').map(c => { const a = c.textContent.trim().split(/\s+/).map(Number); return [a[1], a[0]]; }))];
+      if (segs.length) addT(nm, segs);
+      for (const p of T(pm, 'Point')) { const c = kmlCoords(T(p, 'coordinates')[0]?.textContent)[0]; if (c) addP(nm, c[0], c[1]); }
+    }
+  } else throw new Error(`${fname}: unknown format (use GPX, KML, KMZ or GeoJSON)`);
+  return res;
+}
+$('impBtn').addEventListener('click', () => $('impFile').click());
+$('impFile').addEventListener('change', async () => {
+  const files = [...$('impFile').files]; $('impFile').value = '';
+  let nt = 0, np = 0; const all = [];
+  try {
+    for (const f of files) {
+      let text;
+      if (/\.kmz$/i.test(f.name)) { const z = unzipSync(new Uint8Array(await f.arrayBuffer())); const k = Object.keys(z).find(n => /\.kml$/i.test(n)); if (!k) throw new Error(`${f.name}: no KML inside`); text = new TextDecoder().decode(z[k]); }
+      else text = await f.text();
+      const r = parseTrackFile(text, f.name.replace(/\.[^.]+$/, ''));
+      for (const t of r.trails) { FEAT.trails.push({ id: FEAT.next++, name: t.name, segs: t.segs, on: true }); all.push(...t.segs.flat()); nt++; }
+      if ($('wptPoi').checked && r.pois.length) { addPois(r.pois); np += r.pois.length; }
+    }
+    featsChanged();
+    if (all.length) {
+      const [[s, w], [n, e]] = areaBounds(params());
+      if (!all.some(([la, lo]) => la > s && la < n && lo > w && lo < e)) { fitTo(all); setStatus(`Imported ${nt} trail(s), ${np} waypoint(s) — moved the print area onto the track.`); return; }
+    }
+    setStatus(`Imported ${nt} trail(s)${np ? `, ${np} waypoint(s) as POIs` : ''}.`);
+  } catch (e) { console.error(e); setStatus('Import failed: ' + e.message, true); }
+});
 
 // ---------- address search (geocoding) ----------
+let lastPlace = null;
 async function geocode(q) {
   const out = [];
-  try {   // Photon (komoot, OSM data)
+  try {
     const r = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=6&lang=de`);
     if (!r.ok) throw new Error('Photon HTTP ' + r.status);
     const j = await r.json();
@@ -438,25 +1168,26 @@ async function geocode(q) {
       const name = pr.name || [pr.street, pr.housenumber].filter(Boolean).join(' ') || pr.city || q;
       const street = pr.name && pr.street ? [pr.street, pr.housenumber].filter(Boolean).join(' ') : '';
       const detail = [street, [pr.postcode, pr.city || pr.town || pr.village].filter(Boolean).join(' '), pr.state, pr.country].filter(Boolean).join(', ');
-      out.push({ lat, lon, name, detail, short: pr.name || pr.city || pr.town || pr.village || name, hn: pr.housenumber || '' });
+      out.push({ lat, lon, name, detail, short: pr.name || pr.city || pr.town || pr.village || name });
     }
   } catch (e) { console.warn(e); }
   if (out.length) return out;
-  // fallback: Nominatim
-  const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&accept-language=de&q=${encodeURIComponent(q)}`);
+  const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&accept-language=de&q=${encodeURIComponent(q)}`);
   if (!r.ok) throw new Error('Address lookup failed (HTTP ' + r.status + ')');
   for (const x of await r.json()) {
     const parts = x.display_name.split(', ');
-    out.push({ lat: +x.lat, lon: +x.lon, name: x.name || parts[0], detail: parts.slice(1).join(', '), short: x.name || parts[0], hn: (x.address && x.address.house_number) || '' });
+    out.push({ lat: +x.lat, lon: +x.lon, name: x.name || parts[0], detail: parts.slice(1).join(', '), short: x.name || parts[0] });
   }
   return out;
 }
 function applyPlace(pl, btn) {
+  lastPlace = pl; $('addrPoi').classList.remove('hide');
   $('coords').value = `${pl.lat.toFixed(5)}, ${pl.lon.toFixed(5)}`;
   if ($('addrLabel').checked) $('line1').value = pl.short.toUpperCase();
   for (const b of $('addrResults').children) b.classList.toggle('on', b === btn);
   onLocationChange();
 }
+$('addrPoi').addEventListener('click', () => { if (lastPlace) { addPois([{ name: lastPlace.short, lat: lastPlace.lat, lon: lastPlace.lon }]); setStatus(`Added POI "${lastPlace.short}".`); } });
 async function addrSearch() {
   const q = $('addr').value.trim(); if (!q) return;
   const ll = parseCoords(q);
@@ -466,7 +1197,7 @@ async function addrSearch() {
     const res = await geocode(q);
     $('addrResults').innerHTML = '';
     if (!res.length) { setStatus(`Nothing found for "${q}".`, true); return; }
-    res.forEach((pl, i) => {
+    res.forEach(pl => {
       const b = document.createElement('button'); b.type = 'button';
       b.innerHTML = `${esc(pl.name)}<small>${esc(pl.detail)} · ${pl.lat.toFixed(4)}, ${pl.lon.toFixed(4)}</small>`;
       b.onclick = () => applyPlace(pl, b); $('addrResults').appendChild(b);
@@ -480,29 +1211,29 @@ $('addrBtn').addEventListener('click', addrSearch);
 $('addr').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addrSearch(); } });
 $('addrLabel').addEventListener('change', save);
 
-// ---------- data ----------
+// ---------- tiles (DEM + imagery) ----------
 const tileCache = new Map();
-function loadTile(z, x, y) {
-  const key = `${z}/${x}/${y}`;
-  const hosts = ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/', 'https://elevation-tiles-prod.s3.amazonaws.com/terrarium/'];
+function loadTileImg(urls) {
+  const key = urls[0];
   const one = url => new Promise((res, rej) => {
     const img = new Image(); img.crossOrigin = 'anonymous';
     const t = setTimeout(() => { img.src = ''; rej(new Error('timeout')); }, 20000);
     img.onload = () => { clearTimeout(t); res(img); }; img.onerror = () => { clearTimeout(t); rej(new Error('blocked or missing')); };
-    img.src = url + key + '.png';
+    img.src = url;
   });
-  if (!tileCache.has(key)) tileCache.set(key, one(hosts[0]).catch(() => one(hosts[1])).catch(err => { tileCache.delete(key); throw new Error(`Elevation tile ${key} failed (${err.message})`); }));
+  if (!tileCache.has(key)) {
+    let pr = one(urls[0]); for (const u of urls.slice(1)) pr = pr.catch(() => one(u));
+    tileCache.set(key, pr.catch(err => { tileCache.delete(key); throw new Error(`Tile ${key.split('/').slice(-3).join('/')} failed (${err.message})`); }));
+  }
   return tileCache.get(key);
 }
 const lon2px = (lon, z) => (lon + 180) / 360 * 256 * 2 ** z;
 const lat2px = (lat, z) => { const r = lat * Math.PI / 180; return (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * 256 * 2 ** z; };
-
-async function loadDEM(p) {
+async function loadMosaic(p, urlsFor, maxZ, fineness, label) {
   const [[s, w], [n, e]] = areaBounds(p);
-  const groundPitch = p.pitch / geom(p).scale * 1000;                 // m per mesh cell
-  let z = 14;
+  const groundPitch = p.pitch / geom(p).scale * 1000;
   const res = z => 156543.03 * Math.cos(p.lat * Math.PI / 180) / 2 ** z;
-  while (z > 5 && res(z) < groundPitch / 2) z--;
+  let z = maxZ; while (z > 5 && res(z) < groundPitch / fineness) z--;
   let tx0, tx1, ty0, ty1;
   for (;;) {
     tx0 = Math.floor(lon2px(w, z) / 256); tx1 = Math.floor(lon2px(e, z) / 256);
@@ -513,72 +1244,151 @@ async function loadDEM(p) {
   const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
   const ctx = cv.getContext('2d', { willReadFrequently: true });
   const jobs = [];
-  for (let x = tx0; x <= tx1; x++) for (let y = ty0; y <= ty1; y++) jobs.push(loadTile(z, x, y).then(img => ctx.drawImage(img, (x - tx0) * 256, (y - ty0) * 256)));
-  let done = 0; jobs.forEach(j => j.then(() => setStatus(`Elevation tiles ${++done}/${jobs.length} (zoom ${z})…`)));
+  for (let x = tx0; x <= tx1; x++) for (let y = ty0; y <= ty1; y++) jobs.push(loadTileImg(urlsFor(z, x, y)).then(img => ctx.drawImage(img, (x - tx0) * 256, (y - ty0) * 256, 256, 256)));
+  let done = 0; jobs.forEach(j => j.then(() => setStatus(`${label} ${++done}/${jobs.length} (zoom ${z})…`), () => {}));
   await Promise.all(jobs);
-  const d = ctx.getImageData(0, 0, cw, ch).data, Hm = new Float32Array(cw * ch);
-  for (let i = 0; i < cw * ch; i++) Hm[i] = d[i * 4] * 256 + d[i * 4 + 1] + d[i * 4 + 2] / 256 - 32768;
-  const ox = tx0 * 256, oy = ty0 * 256;
-  return (lat, lon) => {
+  const d = ctx.getImageData(0, 0, cw, ch).data, ox = tx0 * 256, oy = ty0 * 256;
+  const pos = (lat, lon) => {
     let fx = lon2px(lon, z) - ox - 0.5, fy = lat2px(lat, z) - oy - 0.5;
     fx = Math.min(Math.max(fx, 0), cw - 1.001); fy = Math.min(Math.max(fy, 0), ch - 1.001);
-    const x0 = fx | 0, y0 = fy | 0, ax = fx - x0, ay = fy - y0, i = y0 * cw + x0;
-    return (Hm[i] * (1 - ax) + Hm[i + 1] * ax) * (1 - ay) + (Hm[i + cw] * (1 - ax) + Hm[i + cw + 1] * ax) * ay;
+    const x0 = fx | 0, y0 = fy | 0; return [y0 * cw + x0, fx - x0, fy - y0];
   };
+  return { d, cw, pos };
+}
+async function loadDEM(p) {
+  const hosts = ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/', 'https://elevation-tiles-prod.s3.amazonaws.com/terrarium/'];
+  const { d, cw, pos } = await loadMosaic(p, (z, x, y) => hosts.map(h => `${h}${z}/${x}/${y}.png`), 14, 2, 'Elevation tiles');
+  const Hm = new Float32Array(d.length / 4);
+  for (let i = 0; i < Hm.length; i++) Hm[i] = d[i * 4] * 256 + d[i * 4 + 1] + d[i * 4 + 2] / 256 - 32768;
+  return (lat, lon) => { const [i, ax, ay] = pos(lat, lon); return (Hm[i] * (1 - ax) + Hm[i + 1] * ax) * (1 - ay) + (Hm[i + cw] * (1 - ax) + Hm[i + cw + 1] * ax) * ay; };
+}
+const IMG = {
+  esri: { maxZ: 17, url: (z, x, y) => [`https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`] },
+  s2: { maxZ: 15, url: (z, x, y) => [`https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/${z}/${y}/${x}.jpg`] },
+};
+let imgLoading = null;
+async function ensureImagery() {
+  if (!state.dem) throw new Error('Load terrain first.');
+  const p = params(), src = IMG[COL.imgSrc] ? COL.imgSrc : 'esri';
+  const key = JSON.stringify([p.lat, p.lon, p.areaKm, p.printW, p.printD, p.pitch, src]);
+  if (state.img && state.img.key === key) return state.img;
+  if (imgLoading && imgLoading.key === key) return imgLoading.pr;
+  const pr = (async () => {
+    busy(true, 'Loading satellite imagery…');
+    try {
+      const { d, cw, pos } = await loadMosaic(p, IMG[src].url, IMG[src].maxZ, 1, 'Imagery tiles');
+      const sample = (lat, lon, out) => { const [i, ax, ay] = pos(lat, lon); for (let c = 0; c < 3; c++) out[c] = (d[i * 4 + c] * (1 - ax) + d[(i + 1) * 4 + c] * ax) * (1 - ay) + (d[(i + cw) * 4 + c] * (1 - ax) + d[(i + cw + 1) * 4 + c] * ax) * ay; };
+      state.img = { key, sample }; realCache = null;
+      setStatus('Satellite imagery loaded.'); schedule(); return state.img;
+    } catch (e) { setStatus('Imagery failed: ' + e.message + ' — try the other imagery source.', true); throw e; }
+    finally { busy(false); imgLoading = null; }
+  })();
+  imgLoading = { key, pr };
+  return pr;
+}
+let realCache = null;
+function realCells(p, m) {
+  const pal = COL.real.fils.filter(f => f.real); const use = pal.length ? pal : COL.real.fils;
+  const key = [state.img.key, m.nx, m.ny, COL.autoLevels, COL.sat].join('|');
+  if (!realCache || realCache.key !== key) realCache = { key, px: adjustColors(imageryCells(p, m, state.img.sample), COL.autoLevels, COL.sat) };
+  return quantizeCells(realCache.px, use.map(f => ({ id: f.id, lab: rgb2lab(...hex2rgb(f.color)) })), m.nx - 1, m.ny - 1, COL.cleanup);
 }
 
-const waterCache = new Map();
-async function loadWater(p) {
-  const [[s, w], [n, e]] = areaBounds(p);
-  const pad = 0.01, bb = [s - pad, w - pad, n + pad, e + pad].map(v => v.toFixed(4)).join(',');
-  if (waterCache.has(bb)) return waterCache.get(bb);
-  const q = `[out:json][timeout:60];(way["waterway"~"^(river|canal|stream)$"](${bb});way["natural"="water"](${bb});relation["natural"="water"](${bb}););out geom;`;
+// ---------- OpenStreetMap (Overpass) ----------
+async function overpass(q, ms = 45000) {
   let lastErr;
   for (const url of ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter']) {
     try {
-      const ac = new AbortController(), to = setTimeout(() => ac.abort(), 30000);
+      const ac = new AbortController(), to = setTimeout(() => ac.abort(), ms);
       const r = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: ac.signal }).finally(() => clearTimeout(to));
       if (!r.ok) throw new Error('Overpass HTTP ' + r.status);
-      const j = await r.json();
-      const lines = [], polys = [];
-      for (const el of j.elements) {
-        const t = el.tags || {};
-        if (el.type === 'way' && t.waterway) { if (t.tunnel && t.tunnel !== 'no') continue; if (el.geometry) lines.push({ kind: t.waterway === 'stream' ? 'stream' : 'river', pts: el.geometry }); }
-        else if (el.type === 'way' && el.geometry) polys.push([el.geometry]);
-        else if (el.type === 'relation' && el.members) polys.push(el.members.filter(m => m.geometry).map(m => m.geometry));
-      }
-      const out = { lines, polys }; waterCache.set(bb, out); return out;
+      return await r.json();
     } catch (err) { lastErr = err; }
   }
   throw lastErr;
 }
-
-function makeWaterRaster(p, water) {
-  if (!water) return null;
-  return (nx, ny, pitch) => {
-    const { scale, areaKmY } = geom(p), kl = kmLon(p.lat);
-    const cv = document.createElement('canvas'); cv.width = nx; cv.height = ny;
-    const ctx = cv.getContext('2d', { willReadFrequently: true });
-    const dx = p.printW / (nx - 1), dy = p.printD / (ny - 1);
-    const X = pt => (((pt.lon - p.lon) * kl + p.areaKm / 2) * scale) / dx;
-    const Y = pt => (ny - 1) - (((pt.lat - p.lat) * KM_LAT + areaKmY / 2) * scale) / dy;
-    ctx.fillStyle = ctx.strokeStyle = '#fff'; ctx.lineCap = ctx.lineJoin = 'round';
-    if ($('wLakes').checked) for (const rings of water.polys) {
-      ctx.beginPath();
-      for (const ring of rings) ring.forEach((pt, i) => i ? ctx.lineTo(X(pt), Y(pt)) : ctx.moveTo(X(pt), Y(pt)));
-      ctx.fill('evenodd');
+const bboxStr = (p, pad) => { const [[s, w], [n, e]] = areaBounds(p); return [s - pad, w - pad, n + pad, e + pad].map(v => v.toFixed(4)).join(','); };
+function assembleRings(segs) {
+  const same = (a, b) => Math.abs(a[0] - b[0]) < 1e-7 && Math.abs(a[1] - b[1]) < 1e-7;
+  const pool = segs.filter(s => s.length >= 2).map(s => s.slice()), rings = [];
+  while (pool.length) {
+    let ring = pool.pop(), guard = 0;
+    while (!same(ring[0], ring[ring.length - 1]) && guard++ < 100000) {
+      const end = ring[ring.length - 1];
+      const k = pool.findIndex(s => same(s[0], end) || same(s[s.length - 1], end));
+      if (k < 0) break;
+      let s = pool.splice(k, 1)[0]; if (!same(s[0], end)) s = s.reverse();
+      ring = ring.concat(s.slice(1));
     }
-    for (const ln of water.lines) {
-      if (ln.kind === 'river' && !$('wRivers').checked) continue;
-      if (ln.kind === 'stream' && !$('wStreams').checked) continue;
-      ctx.lineWidth = Math.max(1, (ln.kind === 'stream' ? p.riverW * 0.55 : p.riverW) / dx);
-      ctx.beginPath(); ln.pts.forEach((pt, i) => i ? ctx.lineTo(X(pt), Y(pt)) : ctx.moveTo(X(pt), Y(pt))); ctx.stroke();
-    }
-    const d = ctx.getImageData(0, 0, nx, ny).data, M = new Uint8Array(nx * ny);
-    for (let r = 0; r < ny; r++) for (let c = 0; c < nx; c++) M[r * nx + c] = d[((ny - 1 - r) * nx + c) * 4 + 3] > 110 ? 1 : 0;
-    return M;
-  };
+    if (ring.length >= 3) rings.push(ring);
+  }
+  return rings;
 }
+const waterCache = new Map();
+async function loadWater(p) {
+  const bb = bboxStr(p, 0.01);
+  if (waterCache.has(bb)) return waterCache.get(bb);
+  const q = `[out:json][timeout:90];(way["waterway"~"^(river|canal|stream|riverbank)$"](${bb});way["natural"="water"](${bb});way["landuse"="reservoir"](${bb});relation["natural"="water"](${bb});relation["landuse"="reservoir"](${bb});relation["waterway"="riverbank"](${bb}););out geom;`;
+  const j = await overpass(q, 60000);
+  const lines = [], areas = [];
+  const cls = t => (t.waterway === 'riverbank' || /^(river|stream|canal|rapids|ditch|drain)$/.test(t.water || '')) ? 'river' : 'lake';
+  const g2a = g => g.filter(Boolean).map(q => [q.lat, q.lon]);
+  for (const el of j.elements) {
+    const t = el.tags || {};
+    if (el.type === 'way' && el.geometry) {
+      if (/^(river|canal|stream)$/.test(t.waterway || '')) { if (t.tunnel && t.tunnel !== 'no') continue; lines.push({ kind: t.waterway, width: parseFloat(t.width) || 0, pts: g2a(el.geometry) }); }
+      else areas.push({ cls: cls(t), rings: [g2a(el.geometry)] });
+    } else if (el.type === 'relation' && el.members) {
+      const rings = assembleRings(el.members.filter(m => m.type === 'way' && m.geometry && m.role !== 'subarea').map(m => g2a(m.geometry)));
+      if (rings.length) areas.push({ cls: cls(t), rings });
+    }
+  }
+  const out = { lines, areas }; waterCache.set(bb, out); return out;
+}
+function clipSegs(segs, p) {
+  const [[s, w], [n, e]] = areaBounds(p), ps = (n - s) * 0.03, pw = (e - w) * 0.03;
+  const inside = q => q[0] > s - ps && q[0] < n + ps && q[1] > w - pw && q[1] < e + pw, out = [];
+  for (const seg of segs) {
+    let cur = [];
+    for (let i = 0; i < seg.length; i++) {
+      if (inside(seg[i]) || (i > 0 && inside(seg[i - 1])) || (i < seg.length - 1 && inside(seg[i + 1]))) cur.push(seg[i]);
+      else if (cur.length) { if (cur.length >= 2) out.push(cur); cur = []; }
+    }
+    if (cur.length >= 2) out.push(cur);
+  }
+  return out;
+}
+$('osmRoutes').addEventListener('click', async () => {
+  const p = params(); $('osmRoutes').disabled = true; setStatus('Loading marked hiking routes from OpenStreetMap…');
+  try {
+    const j = await overpass(`[out:json][timeout:60];relation["route"~"^(hiking|foot)$"](${bboxStr(p, 0)});out geom;`);
+    let n = 0;
+    for (const el of j.elements) {
+      if (FEAT.trails.some(t => t.src === 'osm:' + el.id)) continue;
+      const segs = clipSegs((el.members || []).filter(m => m.type === 'way' && m.geometry).map(m => m.geometry.filter(Boolean).map(q => [+q.lat.toFixed(6), +q.lon.toFixed(6)])), p);
+      if (!segs.length) continue;
+      const t = el.tags || {}, name = t.name ? (t.ref && !t.name.includes(t.ref) ? `${t.ref} ${t.name}` : t.name) : (t.ref || 'Hiking route');
+      FEAT.trails.push({ id: FEAT.next++, name, segs, on: false, src: 'osm:' + el.id }); n++;
+    }
+    featsChanged();
+    setStatus(n ? `Added ${n} hiking routes (switched off) — tick the ones you want printed.` : 'No new marked hiking routes in this area.');
+  } catch (e) { console.error(e); setStatus('OpenStreetMap not reachable right now — try again in a minute.', true); }
+  finally { $('osmRoutes').disabled = false; }
+});
+$('osmPeaks').addEventListener('click', async () => {
+  const p = params(); $('osmPeaks').disabled = true; setStatus('Loading peaks and huts from OpenStreetMap…');
+  try {
+    const bb = bboxStr(p, 0), max = Math.max(1, p.osmMax);
+    const j = await overpass(`[out:json][timeout:40];(node["natural"="peak"]["name"](${bb});node["tourism"~"^(alpine_hut|wilderness_hut)$"]["name"](${bb}););out;`);
+    const ele = el => parseFloat(((el.tags || {}).ele || '').replace(',', '.')) || 0;
+    const peaks = j.elements.filter(el => el.tags.natural === 'peak').sort((a, b) => ele(b) - ele(a)).slice(0, max);
+    const huts = j.elements.filter(el => el.tags.tourism).sort((a, b) => ele(b) - ele(a)).slice(0, max);
+    const n0 = FEAT.pois.length;
+    addPois([...peaks.map(el => ({ name: el.tags.name, lat: el.lat, lon: el.lon, shape: 'tri' })), ...huts.map(el => ({ name: el.tags.name, lat: el.lat, lon: el.lon, shape: 'square' }))]);
+    setStatus(`Added ${FEAT.pois.length - n0} POIs (${peaks.length} peaks, ${huts.length} huts).`);
+  } catch (e) { console.error(e); setStatus('OpenStreetMap not reachable right now — try again in a minute.', true); }
+  finally { $('osmPeaks').disabled = false; }
+});
 
 // ---------- label ----------
 async function textCanvas(p, color) {
@@ -606,7 +1416,7 @@ async function textMask(p) {
 }
 
 // ---------- 3D preview ----------
-const view = $('view');
+const view = $('view'), labelsEl = $('labels');
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); view.appendChild(renderer.domElement);
 const scene = new THREE.Scene(); scene.background = new THREE.Color(0x111317);
@@ -618,47 +1428,74 @@ const fill = new THREE.DirectionalLight(0xffffff, 0.5); fill.position.set(250, -
 const group = new THREE.Group(); scene.add(group);
 const bedLine = new THREE.LineLoop(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x3a3f4a })); scene.add(bedLine);
 
-const U = { uSheets: { value: Array.from({ length: 64 }, () => new THREE.Vector2(-1, -1)) }, uN: { value: 0 },
-  uGray: { value: new THREE.Color() }, uYel: { value: new THREE.Color() }, uBlue: { value: new THREE.Color() } };
+const blankTex = () => { const t = new THREE.DataTexture(new Uint8Array(4), 1, 1); t.needsUpdate = true; return t; };
+const U = { uZTex: { value: blankTex() }, uCellTex: { value: blankTex() }, uZMax: { value: 1 }, uUseCell: { value: 0 }, uSize: { value: new THREE.Vector2(1, 1) },
+  uBlue: { value: new THREE.Color() }, uTrail: { value: new THREE.Color() } };
 const terrainMat = new THREE.MeshStandardMaterial({ roughness: 0.85, metalness: 0, side: THREE.DoubleSide });
 terrainMat.onBeforeCompile = sh => {
   Object.assign(sh.uniforms, U);
-  sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float water;\nvarying float vZ;\nvarying float vWater;')
-    .replace('#include <begin_vertex>', '#include <begin_vertex>\nvZ = position.z;\nvWater = water;');
-  sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec2 uSheets[64];\nuniform int uN;\nuniform vec3 uGray;\nuniform vec3 uYel;\nuniform vec3 uBlue;\nvarying float vZ;\nvarying float vWater;')
-    .replace('#include <color_fragment>', '#include <color_fragment>\n{ vec3 col = uGray; for (int i = 0; i < 64; i++) { if (i >= uN) break; if (vZ >= uSheets[i].x && vZ < uSheets[i].y) col = uYel; } if (vWater > 0.5) col = uBlue; diffuseColor.rgb = col; }');
+  sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float water;\nattribute float trail;\nattribute float top;\nvarying vec3 vP;\nvarying float vWater;\nvarying float vTrail;\nvarying float vTop;')
+    .replace('#include <begin_vertex>', '#include <begin_vertex>\nvP = position;\nvWater = water;\nvTrail = trail;\nvTop = top;');
+  sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D uZTex;\nuniform sampler2D uCellTex;\nuniform float uZMax;\nuniform float uUseCell;\nuniform vec2 uSize;\nuniform vec3 uBlue;\nuniform vec3 uTrail;\nvarying vec3 vP;\nvarying float vWater;\nvarying float vTrail;\nvarying float vTop;')
+    .replace('#include <color_fragment>', '#include <color_fragment>\n{ vec3 col = texture2D(uZTex, vec2(clamp(vP.z / uZMax, 0.0, 1.0), 0.5)).rgb;\n if (uUseCell > 0.5 && vTop > 0.5) { vec4 cc = texture2D(uCellTex, clamp(vP.xy / uSize, 0.0, 0.9999)); if (cc.a > 0.5) col = cc.rgb; }\n if (vWater > 0.5) col = uBlue; if (vTrail > 0.5) col = uTrail; diffuseColor.rgb = col; }');
 };
 const baseMat = new THREE.MeshStandardMaterial({ roughness: 0.7 });
+const poiMat = new THREE.MeshStandardMaterial({ roughness: 0.5, metalness: 0.1 });
 let labelTex = null;
 const labelMat = new THREE.MeshStandardMaterial({ transparent: true, alphaTest: 0.5, roughness: 0.8 });
 
 function resize() { const r = view.getBoundingClientRect(); renderer.setSize(r.width, r.height); camera.aspect = r.width / r.height; camera.updateProjectionMatrix(); }
 new ResizeObserver(resize).observe(view); resize();
-(function loop() { requestAnimationFrame(loop); controls.update(); renderer.render(scene, camera); })();
+let poiLabels = []; const tmpV = new THREE.Vector3();
+(function loop() {
+  requestAnimationFrame(loop); controls.update(); renderer.render(scene, camera);
+  const W = renderer.domElement.clientWidth, H = renderer.domElement.clientHeight, show = $('poiNames').checked;
+  for (const lb of poiLabels) {
+    tmpV.copy(lb.v).project(camera); const vis = show && tmpV.z < 1;
+    lb.el.style.display = vis ? '' : 'none';
+    if (vis) lb.el.style.transform = `translate(${(tmpV.x + 1) / 2 * W}px, ${(1 - tmpV.y) / 2 * H}px) translate(-50%, -130%)`;
+  }
+})();
 
-let state = { dem: null, water: null, fitted: false, key: '' };
+let state = { dem: null, water: null, img: null, fitted: false, lastModel: null };
+const featsFor = () => ({ water: state.water, trails: FEAT.trails.filter(t => t.on), pois: FEAT.pois.filter(q => q.on) });
+function colorCfg(p, m) {
+  const A = PAL().asg, Cu = COL.custom;
+  const cfg = { mode: COL.mode, terrainFil: +A.terrain, accentFil: +A.text, coreFil: +A.core, bands: Cu.bands.map(b => ({ fil: +b.fil, upTo: +b.upTo })),
+    rockFil: COL.mode === 'bands' ? +A.rock : -1, slopeDeg: Cu.slopeDeg, skin: Math.max(0.2, COL.skin), realContours: COL.realContours };
+  if (cfg.mode === 'real') { if (state.img) cfg.cellColors = realCells(p, m); else { cfg.mode = 'contour'; cfg.terrainFil = +A.core; } }
+  return cfg;
+}
+const asgIds = () => { const A = PAL().asg; return { base: +A.base, water: +A.water, trail: +A.trail, poi: +A.poi, text: +A.text }; };
 
 async function rebuildPreview() {
   if (!state.dem) return;
   const p = params();
+  if (COL.mode === 'real' && !state.img) ensureImagery().catch(() => {});
   const maxV = 260000; const pp = Math.max(p.pitch, Math.sqrt(p.printW * p.printD / maxV));
-  const m = computeModel(p, state.dem, makeWaterRaster(p, state.water), pp);
-  const { nx, ny, xs, ys, Zc, TR, W } = m, N = nx * ny;
-  const pos = new Float32Array(N * 3), wat = new Float32Array(N);
-  for (let r = 0; r < ny; r++) for (let c = 0; c < nx; c++) { const i = r * nx + c; pos[i * 3] = xs[c]; pos[i * 3 + 1] = ys[r]; pos[i * 3 + 2] = Zc[i] + TR[i]; wat[i] = W[i]; }
+  const m = computeModel(p, state.dem, featsFor(), pp); state.lastModel = m;
+  const plan = makePlan(p, m, colorCfg(p, m));
+  const { nx, ny, xs, ys, Zc, TU, W, TM } = m, N = nx * ny;
+  const pos = new Float32Array(N * 3), wat = new Float32Array(N), trl = new Float32Array(N), one = new Float32Array(N).fill(1);
+  for (let r = 0; r < ny; r++) for (let c = 0; c < nx; c++) { const i = r * nx + c; pos[i * 3] = xs[c]; pos[i * 3 + 1] = ys[r]; pos[i * 3 + 2] = TU[i]; wat[i] = W[i] && !TM[i] ? 1 : 0; trl[i] = TM[i]; }
   const idx = new Uint32Array((nx - 1) * (ny - 1) * 6); let k = 0;
   for (let r = 0; r < ny - 1; r++) for (let c = 0; c < nx - 1; c++) { const a = r * nx + c; idx[k++] = a; idx[k++] = a + 1; idx[k++] = a + nx + 1; idx[k++] = a; idx[k++] = a + nx + 1; idx[k++] = a + nx; }
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('water', new THREE.BufferAttribute(wat, 1)); g.setIndex(new THREE.BufferAttribute(idx, 1)); g.computeVertexNormals();
-  // side walls
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('water', new THREE.BufferAttribute(wat, 1)); g.setAttribute('trail', new THREE.BufferAttribute(trl, 1)); g.setAttribute('top', new THREE.BufferAttribute(one, 1)); g.setIndex(new THREE.BufferAttribute(idx, 1)); g.computeVertexNormals();
   const per = []; for (let c = 0; c < nx; c++) per.push(c); for (let r = 1; r < ny; r++) per.push(r * nx + nx - 1); for (let c = nx - 2; c >= 0; c--) per.push((ny - 1) * nx + c); for (let r = ny - 2; r >= 0; r--) per.push(r * nx);
   const wp = [];
   for (let q = 0; q < per.length - 1; q++) {
     const a = per[q], b = per[q + 1]; const ax = pos[a * 3], ay = pos[a * 3 + 1], az = Zc[a], bx = pos[b * 3], by = pos[b * 3 + 1], bz = Zc[b];
     wp.push(ax, ay, p.base, bx, by, p.base, bx, by, bz, ax, ay, p.base, bx, by, bz, ax, ay, az);
   }
-  const gw = new THREE.BufferGeometry(); gw.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3)); gw.setAttribute('water', new THREE.Float32BufferAttribute(new Float32Array(wp.length / 3), 1)); gw.computeVertexNormals();
+  const gw = new THREE.BufferGeometry(), z0s = new Float32Array(wp.length / 3); gw.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3));
+  for (const nm of ['water', 'trail', 'top']) gw.setAttribute(nm, new THREE.Float32BufferAttribute(z0s, 1)); gw.computeVertexNormals();
   for (const ch of [...group.children]) { ch.geometry.dispose(); group.remove(ch); }
   group.add(new THREE.Mesh(g, terrainMat), new THREE.Mesh(gw, terrainMat));
+  for (const pr of m.prisms) {
+    const b = prismBody(pr.shape, pr.X, pr.Y, pr.R, pr.z0, pr.z1);
+    const gp = new THREE.BufferGeometry(); gp.setAttribute('position', new THREE.BufferAttribute(b.V, 3)); gp.setIndex(new THREE.BufferAttribute(b.F, 1));
+    const gn = gp.toNonIndexed(); gn.computeVertexNormals(); gp.dispose(); group.add(new THREE.Mesh(gn, poiMat));
+  }
   const bx = new THREE.Mesh(new THREE.BoxGeometry(p.printW, p.printD + p.strip, p.base), baseMat); bx.position.set(p.printW / 2, (p.printD - p.strip) / 2, p.base / 2); group.add(bx);
   if (p.strip > 0) {
     const { cv } = await textCanvas(p, '#ffffff');
@@ -666,22 +1503,42 @@ async function rebuildPreview() {
     labelMat.map = labelTex; labelMat.needsUpdate = true;
     const lm = new THREE.Mesh(new THREE.PlaneGeometry(p.printW, p.strip), labelMat); lm.position.set(p.printW / 2, -p.strip / 2, p.base + p.textH); group.add(lm);
   }
-  updateColors(m.sheets);
+  // color textures
+  const rgbOf = new Map(PAL().fils.map(f => [f.id, hex2rgb(f.color)])), A = PAL().asg;
+  const zMax = m.zmax + 2, ZT = 2048, zd = new Uint8Array(ZT * 4);
+  for (let t = 0; t < ZT; t++) { const z = (t + 0.5) / ZT * zMax; const s = plan.slabs.find(s => z >= s.z0 && z < s.z1) || plan.slabs[plan.slabs.length - 1]; const c = rgbOf.get(s.fil) || [136, 136, 136]; zd.set([c[0], c[1], c[2], 255], t * 4); }
+  const zt = new THREE.DataTexture(zd, ZT, 1); zt.colorSpace = THREE.SRGBColorSpace; zt.needsUpdate = true;
+  U.uZTex.value.dispose(); U.uZTex.value = zt; U.uZMax.value = zMax; U.uSize.value.set(p.printW, p.printD);
+  U.uCellTex.value.dispose();
+  if (plan.skin) {
+    const { C, cw, ch } = plan.skin, cd = new Uint8Array(cw * ch * 4);
+    for (let i = 0; i < cw * ch; i++) { const c = rgbOf.get(C[i]) || [136, 136, 136]; cd[i * 4] = c[0]; cd[i * 4 + 1] = c[1]; cd[i * 4 + 2] = c[2]; cd[i * 4 + 3] = 255; }
+    const ct = new THREE.DataTexture(cd, cw, ch); ct.colorSpace = THREE.SRGBColorSpace; ct.magFilter = ct.minFilter = THREE.NearestFilter; ct.needsUpdate = true;
+    U.uCellTex.value = ct; U.uUseCell.value = 1;
+  } else { U.uCellTex.value = blankTex(); U.uUseCell.value = 0; }
+  U.uBlue.value.set(filColor(A.water)); U.uTrail.value.set(filColor(A.trail));
+  baseMat.color.set(filColor(A.base)); labelMat.color.set(filColor(A.text)); poiMat.color.set(filColor(A.poi));
+  // POI name labels
+  labelsEl.innerHTML = '';
+  poiLabels = m.prisms.filter(pr => pr.name).map(pr => { const el = mk('div', { className: 'plabel', textContent: pr.name }); labelsEl.append(el); return { el, v: new THREE.Vector3(pr.X, pr.Y, pr.z1 + 0.5) }; });
+
   const bh = p.bed / 2, cx = p.printW / 2, cy = (p.printD - p.strip) / 2;
   bedLine.geometry.setFromPoints([new THREE.Vector3(cx - bh, cy - bh, 0), new THREE.Vector3(cx + bh, cy - bh, 0), new THREE.Vector3(cx + bh, cy + bh, 0), new THREE.Vector3(cx - bh, cy + bh, 0)]);
   if (!state.fitted) {
     controls.target.set(cx, cy, m.zmax / 3);
     camera.position.set(cx - p.printW * 0.3, cy - p.printD * 1.55, Math.max(p.printW, p.printD) * 1.15); state.fitted = true;
   }
+  // filaments in use
+  const used = new Set(plan.slabs.map(s => s.fil)); if (plan.skin) for (const f of new Set(plan.skin.C)) used.add(f);
+  used.add(+A.base); if (W.some(Boolean)) used.add(+A.water); if (TM.some(Boolean)) used.add(+A.trail); if (m.prisms.length) used.add(+A.poi); if (p.strip > 0) used.add(+A.text);
+  const tools = [...new Set([...used].map(id => (filById(id) || {}).tool))].sort((a, b) => a - b);
   const fits = p.printW <= p.bed && p.printD + p.strip <= p.bed;
+  const nT = FEAT.trails.filter(t => t.on).length, nP = m.prisms.length;
+  const modeTxt = COL.mode === 'real' && !state.img ? 'realistic (imagery loading…)' : { contour: 'contour lines', bands: 'elevation bands', real: 'realistic' }[COL.mode];
   $('hud').innerHTML = `<b>${p.printW.toFixed(0)} × ${(p.printD + p.strip).toFixed(0)} × ${m.zmax.toFixed(1)} mm</b>${fits ? '' : ' <span style="color:#ff7a6b">larger than bed</span>'}<br>` +
     `Elevation ${m.hmin.toFixed(0)}–${m.hmax.toFixed(0)} m · scale 1:${Math.round(1e6 / m.scale).toLocaleString('de-AT')}<br>` +
-    `${m.sheets.length} contour lines${m.sheets.length ? ` (${m.sheets[0][2]}–${m.sheets[m.sheets.length - 1][2]} m)` : ''} · water ${state.water ? 'on' : 'unavailable'}`;
-}
-function updateColors(sheets) {
-  if (sheets) { U.uN.value = Math.min(64, sheets.length); sheets.slice(0, 64).forEach((s, i) => U.uSheets.value[i].set(s[0], s[1])); }
-  U.uGray.value.set($('cGray').value); U.uYel.value.set($('cAccent').value); U.uBlue.value.set($('cWater').value);
-  baseMat.color.set($('cBase').value); labelMat.color.set($('cAccent').value);
+    `${modeTxt} · ${used.size} filaments on ${tools.length} tools (${tools.map(t => 'T' + t).join(' ')})<br>` +
+    `${m.sheets.length} contours · ${state.water ? `water on (${m.nLakes} lakes)` : 'water unavailable'} · ${nT} trails · ${nP} POIs${m.poiSkipped ? ` <span style="color:#ff7a6b">(${m.poiSkipped} too close to the edge)</span>` : ''}`;
 }
 
 // ---------- loading ----------
@@ -694,7 +1551,7 @@ async function loadArea() {
     const waterP = loadWater(p).catch(err => { console.warn(err); return null; });
     const dem = await loadDEM(p);
     if (seq !== loadSeq) return;
-    state.dem = dem; state.water = null; state.fitted = false; state.key = JSON.stringify([p.lat, p.lon, p.areaKm, p.printW, p.printD]);
+    state.dem = dem; state.water = null; state.img = null; state.fitted = false;
     setStatus('Terrain loaded — loading rivers & lakes in the background…');
     await rebuildPreview();
     $('dl3mf').disabled = $('dlStl').disabled = false;
@@ -702,7 +1559,7 @@ async function loadArea() {
     waterP.then(async water => {
       if (seq !== loadSeq) return;
       state.water = water;
-      if (water) { await rebuildPreview(); setStatus('Terrain and water loaded.'); }
+      if (water) { await rebuildPreview(); setStatus(`Terrain and water loaded (${water.lines.length} river segments, ${water.areas.length} water areas).`); }
       else setStatus('Terrain loaded. River data (OpenStreetMap) not reachable right now — model without rivers. Press "Load terrain" to retry.', true);
     });
   } catch (err) { console.error(err); setStatus(err.message + ' — check your internet connection.', true); }
@@ -713,39 +1570,38 @@ function onLocationChange() { if ($('coords').value.trim() && !parseCoords($('co
 $('fetchBtn').addEventListener('click', loadArea);
 for (const id of ['coords', 'areaKm', 'printW', 'printD']) $(id).addEventListener('change', onLocationChange);
 let pvTimer;
-const schedule = () => { save(); clearTimeout(pvTimer); pvTimer = setTimeout(() => rebuildPreview().catch(e => setStatus(e.message, true)), 120); };
-for (const id of ['bed','pitch','vex','base','floor','smooth','interval','firstContour','sheetLayers','layer','riverW','carve','strip','textH','textScale','line1','line2','wRivers','wStreams','wLakes']) $(id).addEventListener('input', schedule);
-for (const id of ['cAccent','cGray','cWater','cBase','tAccent','tGray','tWater','tBase']) $(id).addEventListener('input', () => { save(); updateColors(); });
+function schedule() { save(); clearTimeout(pvTimer); pvTimer = setTimeout(() => rebuildPreview().catch(e => { console.error(e); setStatus(e.message, true); }), 150); }
+for (const id of ['bed','pitch','vex','base','floor','smooth','interval','firstContour','sheetLayers','layer','riverW','streamW','carve','recess','minLake','trailW','trailH','trailDepth','poiSize','poiH','strip','textH','textScale','line1','line2', ...BOOL, 'trailMode']) $(id).addEventListener('input', schedule);
+for (const id of ['poiShape', 'wptPoi', 'poiNames', 'osmMax']) $(id).addEventListener('change', save);
 
 // ---------- export ----------
-function slug() { return ($('line1').value || 'relief').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w]+/g, '_').replace(/^_|_$/g, '').toLowerCase() || 'relief'; }
+function slug() { return ($('line1').value || 'relief').normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^\w]+/g, '_').replace(/^_|_$/g, '').toLowerCase() || 'relief'; }
 function download(u8, name, type) {
   const url = URL.createObjectURL(new Blob([u8], { type })); const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 20000);
 }
 async function buildExport() {
   const p = params();
+  if (COL.mode === 'real') await ensureImagery();
   busy(true, 'Building meshes…'); await nextFrame();
-  const m = computeModel(p, state.dem, makeWaterRaster(p, state.water), p.pitch);
+  const m = computeModel(p, state.dem, featsFor(), p.pitch);
+  const plan = makePlan(p, m, colorCfg(p, m));
   const tm = await textMask(p);
-  const B = buildBodies(p, m, tm);
-  const parts = [
-    { name: 'base', body: B.base, tool: +$('tBase').value },
-    { name: 'terrain', body: B.gray, tool: +$('tGray').value },
-    { name: 'contours_text', body: B.accent, tool: +$('tAccent').value },
-    { name: 'water', body: B.water, tool: +$('tWater').value },
-  ].filter(x => x.body && x.body.F.length);
+  const bodies = buildBodies(p, m, tm, plan, asgIds());
+  const base = +PAL().asg.base;
+  const parts = bodies.map(b => { const f = filById(b.fil) || { name: 'filament', tool: 1 }; return { name: f.name, tool: f.tool, body: b.body, isBase: b.fil === base }; })
+    .sort((a, b) => (b.isBase - a.isBase) || a.tool - b.tool);
   return { p, m, parts };
 }
 $('dl3mf').addEventListener('click', async () => {
   try {
-    const { p, m, parts } = await buildExport();
+    const { p, parts } = await buildExport();
     busy(true, 'Writing 3MF…'); await nextFrame();
     const files = build3MF(parts, p, $('line1').value || 'Relief');
     busy(true, 'Compressing…'); await nextFrame();
     const zip = zipSync(files, { level: 6 });
     download(zip, slug() + '_relief.3mf', 'model/3mf');
     const tris = parts.reduce((s, x) => s + x.body.F.length / 3, 0);
-    $('exportInfo').textContent = `3MF: ${parts.length} parts, ${(tris / 1e6).toFixed(2)} M triangles, ${(zip.length / 1e6).toFixed(1)} MB. Tools: ` + parts.map(x => `${x.name} → T${x.tool}`).join(', ');
+    $('exportInfo').textContent = `3MF: ${parts.length} parts, ${(tris / 1e6).toFixed(2)} M triangles, ${(zip.length / 1e6).toFixed(1)} MB. Load these filaments: ` + parts.map(x => `T${x.tool} ${x.name}`).join(' · ');
   } catch (err) { console.error(err); setStatus('Export failed: ' + err.message, true); }
   finally { busy(false); }
 });
@@ -753,14 +1609,15 @@ $('dlStl').addEventListener('click', async () => {
   try {
     const { parts } = await buildExport();
     busy(true, 'Writing STLs…'); await nextFrame();
-    const files = {}; parts.forEach((x, i) => files[`${slug()}_${i + 1}_${x.name}_T${x.tool}.stl`] = buildSTL(x.body, x.name));
+    const files = {}; parts.forEach((x, i) => files[`${slug()}_${i + 1}_T${x.tool}_${x.name.replace(/[^\w]+/g, '_')}.stl`] = buildSTL(x.body, x.name));
     const zip = zipSync(files, { level: 6 });
     download(zip, slug() + '_relief_stls.zip', 'application/zip');
-    $('exportInfo').textContent = 'STLs: drag all files into the slicer at once and answer "Yes" to load them as one multi-part object.';
+    $('exportInfo').textContent = 'STLs: drag all files into the slicer at once and answer "Yes" to load them as one multi-part object. Tool numbers are in the file names.';
   } catch (err) { console.error(err); setStatus('Export failed: ' + err.message, true); }
   finally { busy(false); }
 });
 
+fixRefs(); renderColors(); renderFeatLists(); drawFeatures();
 loadArea();
 </script>
 </body>

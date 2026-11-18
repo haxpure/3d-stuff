@@ -3,8 +3,10 @@ import os
 S = os.path.dirname(os.path.abspath(__file__)); R = os.path.dirname(S)
 rd = lambda f: open(os.path.join(S, f), encoding='utf-8').read()
 core = rd('core.mjs'); core = core[:core.index('export {')]
-app = rd('app.html')
-open(os.path.join(R, 'relief-maker.html'), 'w', encoding='utf-8').write(app.replace('/*CORE*/', core))
+# Relief Maker (V2) is maintained as one self-contained file
+open(os.path.join(R, 'relief-maker.html'), 'w', encoding='utf-8').write(rd('relief_maker.html'))
+# Town Maker reuses a few blocks (coords, geocoder, DEM loader, label) from the V1 relief page
+app = rd('town_shared.html')
 cut = lambda a, b: app[app.index(a):app.index(b)]
 t = rd('town_app.html')
 for k, v in [('/*CORE*/', core), ('/*EARCUT*/', rd('earcut_inline.js')), ('/*TOWNCORE*/', rd('town_core.mjs')), ('/*MVT*/', rd('mvt.mjs')),
