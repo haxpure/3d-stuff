@@ -125,14 +125,9 @@
   </details>
 
   <details open><summary>Colors &amp; filaments</summary>
-    <div class="row"><label>Preset<small>replaces the list below</small></label><select id="preset">
-      <option value="">Choose…</option>
-      <optgroup label="4 colors (fixed)"><option value="classic">Classic: black · gray · yellow · cyan (contours)</option>
-      <option value="alpine4">Alpine: dark green · olive · light gray · blue</option>
-      <option value="gold4">Forest &amp; gold: green · stone · gold · blue</option>
-      <option value="snow4">High alpine: charcoal · rock · snow · red trail</option></optgroup>
-      <optgroup label="More colors (slicer mixes)"><option value="grad8">Alpine gradient: 8 terrain colors</option><option value="satellite">Satellite: 9 colors</option></optgroup>
-    </select></div>
+    <div class="row"><label>Preset<small>replaces the list below</small></label><select id="preset"></select></div>
+    <div class="addr" style="margin:2px 0 4px"><input type="text" id="presetName" placeholder="Name for your own preset"><button type="button" id="presetSave" class="sec">Save</button></div>
+    <div id="myList" class="list"></div>
     <div class="row"><label>Mode</label><select id="colMode">
       <option value="four">4 colors (fixed)</option>
       <option value="multi">More colors (slicer mixes)</option>
@@ -378,6 +373,9 @@ window.FS = (() => {
     'Terrain loaded — loading buildings & roads from OpenStreetMap…': 'Gelände geladen – lade Gebäude & Straßen von OpenStreetMap…', 'Loading buildings & roads (OpenFreeMap)…': 'Lade Gebäude & Straßen (OpenFreeMap)…',
     'Buildings could not be loaded (OpenStreetMap server busy). Press "Load area" to retry.': 'Gebäude konnten nicht geladen werden (OpenStreetMap-Server ausgelastet). „Gebiet laden" für neuen Versuch.',
     'Buildings not loaded yet': 'Gebäude noch nicht geladen',
+    '4 colors': '4 Farben', 'More colors': 'Mehr Farben', 'My presets': 'Eigene Vorlagen', 'Name for your own preset': 'Name für eigene Vorlage', 'Save': 'Speichern', 'Delete preset': 'Vorlage löschen',
+    'Browser storage is full — preset not saved.': 'Browserspeicher voll – Vorlage nicht gespeichert.',
+    'This preset has more than 4 colors — switch the mode to "More colors" to use it.': 'Diese Vorlage hat mehr als 4 Farben – stell den Modus auf „Mehr Farben", um sie zu verwenden.',
     // --- Full Spectrum mode ---
     'Full Spectrum pack (CMY + W/G)': 'Full-Spectrum-Set (CMY + W/G)', 'Filament pack': 'Filament-Set', 'T1 Cyan · T2 Magenta · T3 Yellow · T4 White / Gray': 'T1 Cyan · T2 Magenta · T3 Gelb · T4 Weiß / Grau',
     'Full Spectrum White Edition': 'Full Spectrum White Edition', 'Full Spectrum Gray Edition': 'Full Spectrum Gray Edition', 'Your colors (Full Spectrum)': 'Deine Farben (Full Spectrum)',
@@ -412,6 +410,7 @@ window.FS = (() => {
     [/^(\d+) contours · /, '$1 Höhenlinien · '], [/water on \((\d+) lakes\)/, 'Wasser an ($1 Seen)'], [/water unavailable/, 'Wasser nicht verfügbar'], [/ · (\d+) trails · /, ' · $1 Wege · '],
     [/\((\d+) too close to the edge\)/, '($1 zu nah am Rand)'],
     [/^(\d+) buildings \((\d+) pitched roofs\) · (\d+) trees · (\d+) highlighted$/, '$1 Gebäude ($2 mit Schrägdach) · $3 Bäume · $4 markiert'],
+    [/^Saved preset "(.*)"\.$/, 'Vorlage „$1" gespeichert.'], [/^(.+) \((\d+) colors\)$/, '$1 ($2 Farben)'],
     [/^Preview at ([\d.]+) mm, export at ([\d.]+) mm$/, 'Vorschau mit $1 mm, Export mit $2 mm'],
   ];
   const norm = s => s.replace(/\s+/g, ' ').trim();
@@ -422,7 +421,7 @@ window.FS = (() => {
     let t = core; for (const [rx, rep] of R) t = t.replace(rx, rep);
     return t === core ? s : m[1] + t + m[3];
   };
-  const orig = new WeakMap(), mine = new WeakMap(), ATTR = ['placeholder', 'title'];
+  const orig = new WeakMap(), mine = new WeakMap(), ATTR = ['placeholder', 'title', 'label'];
   let lang = 'en';
   try { lang = localStorage.getItem('makerLang') || ((navigator.language || '').toLowerCase().startsWith('de') ? 'de' : 'en'); } catch (e) {}
   const skip = el => el && el.closest && el.closest('#map, script, style, #langSw, textarea');
@@ -1114,13 +1113,15 @@ const PRESETS = {
   grad8: { mode: 'grad', fils: [['Black', '#1b1c1e', 1, 0], ['Deep green', '#24401f', 2], ['Green', '#3f6b2c', 3], ['Olive', '#8a8f3e', 4], ['Tan', '#b49a64', 5], ['Rock', '#8e8b84', 6], ['Light gray', '#cfcfca', 7], ['Snow', '#f4f4f0', 8], ['Lake blue', '#2c6bd6', 9, 0], ['Trail red', '#e2342b', 10, 0]],
     asg: { base: 0, core: 0, terrain: 2, text: 7, water: 8, trail: 9, poi: 9, rock: -1 }, bands: [[1, 0.2], [2, 0.38], [3, 0.52], [4, 0.64], [5, 0.78], [6, 0.9], [7, 1]], slope: 40 },
 };
-function presetPal(key, hmin = 300, hmax = 2000) {
-  const P = PRESETS[key], off = (P.mode === 'real' || P.mode === 'grad') ? 101 : 1;
+function presetPal(key, hmin = 300, hmax = 2000) { return palFrom(PRESETS[key], hmin, hmax); }
+function palFrom(P, hmin = 300, hmax = 2000) {
+  const off = (P.mode === 'real' || P.mode === 'grad') ? 101 : 1;
   const fils = P.fils.map((f, i) => ({ id: off + i, name: f[0], color: f[1], tool: f[2], real: f[3] !== 0 }));
   const id = k => k < 0 ? -1 : fils[k].id, asg = {};
   for (const k in P.asg) asg[k] = id(P.asg[k]);
   const pal = { fils, asg, next: off + fils.length };
-  if (P.bands) { pal.bands = P.bands.map(([f, fr]) => ({ fil: id(f), upTo: Math.round(hmin + (hmax - hmin) * fr) })); pal.slopeDeg = P.slope || 35; }
+  if (P.bandsAbs) { pal.bands = P.bandsAbs.filter(([f]) => f >= 0).map(([f, up]) => ({ fil: id(f), upTo: up })); pal.slopeDeg = P.slope || 35; }
+  else if (P.bands) { pal.bands = P.bands.map(([f, fr]) => ({ fil: id(f), upTo: Math.round(hmin + (hmax - hmin) * fr) })); pal.slopeDeg = P.slope || 35; }
   return pal;
 }
 let COL = null;
@@ -1164,6 +1165,7 @@ function filSelect(value, onChange, none) {
 }
 function renderColors() {
   const real = COL.mode !== 'four', fsm = COL.mode === 'fs', sat = imode() === 'real', pal = PAL();
+  renderPresets();
   if (fsm) fsReset();
   $('filTitle').textContent = fsm ? 'Your colors (Full Spectrum)' : real ? 'Your colors' : 'Your 4 filaments';
   $('filHint').textContent = fsm
@@ -1235,13 +1237,46 @@ for (const id of ['autoLevels', 'realContours']) $(id).addEventListener('change'
 $('imgSrc').addEventListener('change', () => { COL.imgSrc = $('imgSrc').value; colorsChanged(false); ensureImagery().catch(() => {}); });
 $('filAdd').addEventListener('click', () => { const R = PAL(), t = Math.min(32, Math.max(0, ...R.fils.map(f => f.tool)) + 1); R.fils.push({ id: R.next++, name: 'New color', color: '#888888', tool: t, real: true }); colorsChanged(true); });
 $('filSort').addEventListener('click', () => { PAL().fils.sort((a, b) => a.tool - b.tool); colorsChanged(true); });
+const PRESET_LIST = [['4 colors', [['classic', 'Classic: black · gray · yellow · cyan (contours)'], ['alpine4', 'Alpine: dark green · olive · light gray · blue'], ['gold4', 'Forest & gold: green · stone · gold · blue'], ['snow4', 'High alpine: charcoal · rock · snow · red trail']]],
+  ['More colors', [['grad8', 'Alpine gradient: 8 terrain colors'], ['satellite', 'Satellite: 9 colors']]]];
+const loadMy = () => { try { return JSON.parse(localStorage.getItem('reliefMakerPresets') || '[]'); } catch (e) { return []; } };
+const saveMy = list => { try { localStorage.setItem('reliefMakerPresets', JSON.stringify(list)); } catch (e) { setStatus('Browser storage is full — preset not saved.', true); } };
+const presetObj = k => k.startsWith('my:') ? loadMy()[+k.slice(3)] : PRESETS[k];
+function renderPresets() {
+  const sel = $('preset'), four = COL.mode === 'four', my = loadMy(); sel.innerHTML = '';
+  sel.add(new Option('Choose…', ''));
+  const group = (label, items) => { const og = document.createElement('optgroup'); og.label = label;
+    for (const [v, l] of items) { const P = presetObj(v), o = new Option(l, v); if (four && P.fils.length !== 4) o.disabled = true; og.appendChild(o); } sel.appendChild(og); };
+  for (const [label, items] of PRESET_LIST) group(label, items);
+  if (my.length) group('My presets', my.map((P, i) => ['my:' + i, `${P.name} (${P.fils.length} colors)`]));
+  const ml = $('myList'); ml.innerHTML = '';
+  my.forEach((P, i) => {
+    const sw = mk('span', { className: 'mix' }); for (const f of P.fils) sw.append(mk('i', { style: `background:${f[1]}` }));
+    const del = mk('button', { type: 'button', className: 'ib x', textContent: '×', title: 'Delete preset' });
+    del.addEventListener('click', () => { const l = loadMy(); l.splice(i, 1); saveMy(l); renderPresets(); });
+    ml.append(mk('div', { className: 'item' }, mk('span', { className: 'meta', textContent: P.name, style: 'flex:1;color:#c7cbd3;overflow:hidden;text-overflow:ellipsis' }), sw, del));
+  });
+}
 $('preset').addEventListener('change', () => {
   const k = $('preset').value; if (!k) return;
-  const m = state.lastModel, pal = presetPal(k, m ? m.hmin : 350, m ? m.hmax : 1450);
-  const md = PRESETS[k].mode;
-  if (md === 'real' || md === 'grad') { if (COL.mode === 'fs') COL.fs = pal; else { COL.real = pal; COL.mode = 'multi'; } COL.styleN = md === 'real' ? 'real' : 'bands'; }
-  else { COL.custom = pal; COL.mode = 'four'; COL.style4 = md; }
-  $('preset').value = ''; colorsChanged(true); if (imode() === 'real') ensureImagery().catch(() => {});
+  const P = presetObj(k); $('preset').value = ''; if (!P) return;
+  const m = state.lastModel, pal = palFrom(P, m ? m.hmin : 350, m ? m.hmax : 1450);
+  if (COL.mode === 'four') {
+    if (pal.fils.length !== 4) { setStatus('This preset has more than 4 colors — switch the mode to "More colors" to use it.', true); return; }
+    COL.custom = pal; COL.style4 = P.mode === 'contour' ? 'contour' : 'bands';
+  } else {
+    if (!pal.bands || pal.bands.length < 2) pal.bands = pal.fils.filter(f => f.id !== pal.asg.base && f.id !== pal.asg.water && f.id !== pal.asg.text).map((f, i, a) => ({ fil: f.id, upTo: Math.round((m ? m.hmin : 350) + ((m ? m.hmax : 1450) - (m ? m.hmin : 350)) * (i + 1) / a.length) }));
+    if (COL.mode === 'fs') COL.fs = pal; else COL.real = pal;
+    COL.styleN = P.mode === 'real' ? 'real' : 'bands';
+  }
+  colorsChanged(true); if (imode() === 'real') ensureImagery().catch(() => {});
+});
+$('presetSave').addEventListener('click', () => {
+  const pal = PAL(), my = loadMy(), name = $('presetName').value.trim() || `My colors ${my.length + 1}`;
+  const idx = id => +id < 0 ? -1 : pal.fils.findIndex(f => f.id === +id);
+  my.push({ name, mode: imode() === 'real' ? 'real' : COL.mode === 'four' ? imode() : 'grad', fils: pal.fils.map(f => [f.name, f.color, f.tool, f.real === false ? 0 : 1]),
+    asg: Object.fromEntries(Object.entries(pal.asg).map(([k, v]) => [k, idx(v)])), bandsAbs: (pal.bands || []).map(b => [idx(b.fil), b.upTo]), slope: pal.slopeDeg });
+  saveMy(my); $('presetName').value = ''; renderPresets(); setStatus(`Saved preset "${name}".`);
 });
 $('bandAdd').addEventListener('click', () => {
   const C = PAL(), m = state.lastModel, top = C.bands.length > 1 ? C.bands[C.bands.length - 2].upTo : (m ? m.hmin : 300);

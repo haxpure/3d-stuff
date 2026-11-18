@@ -301,6 +301,9 @@ window.FS = (() => {
     'Terrain loaded — loading buildings & roads from OpenStreetMap…': 'Gelände geladen – lade Gebäude & Straßen von OpenStreetMap…', 'Loading buildings & roads (OpenFreeMap)…': 'Lade Gebäude & Straßen (OpenFreeMap)…',
     'Buildings could not be loaded (OpenStreetMap server busy). Press "Load area" to retry.': 'Gebäude konnten nicht geladen werden (OpenStreetMap-Server ausgelastet). „Gebiet laden" für neuen Versuch.',
     'Buildings not loaded yet': 'Gebäude noch nicht geladen',
+    '4 colors': '4 Farben', 'More colors': 'Mehr Farben', 'My presets': 'Eigene Vorlagen', 'Name for your own preset': 'Name für eigene Vorlage', 'Save': 'Speichern', 'Delete preset': 'Vorlage löschen',
+    'Browser storage is full — preset not saved.': 'Browserspeicher voll – Vorlage nicht gespeichert.',
+    'This preset has more than 4 colors — switch the mode to "More colors" to use it.': 'Diese Vorlage hat mehr als 4 Farben – stell den Modus auf „Mehr Farben", um sie zu verwenden.',
     // --- Full Spectrum mode ---
     'Full Spectrum pack (CMY + W/G)': 'Full-Spectrum-Set (CMY + W/G)', 'Filament pack': 'Filament-Set', 'T1 Cyan · T2 Magenta · T3 Yellow · T4 White / Gray': 'T1 Cyan · T2 Magenta · T3 Gelb · T4 Weiß / Grau',
     'Full Spectrum White Edition': 'Full Spectrum White Edition', 'Full Spectrum Gray Edition': 'Full Spectrum Gray Edition', 'Your colors (Full Spectrum)': 'Deine Farben (Full Spectrum)',
@@ -335,6 +338,7 @@ window.FS = (() => {
     [/^(\d+) contours · /, '$1 Höhenlinien · '], [/water on \((\d+) lakes\)/, 'Wasser an ($1 Seen)'], [/water unavailable/, 'Wasser nicht verfügbar'], [/ · (\d+) trails · /, ' · $1 Wege · '],
     [/\((\d+) too close to the edge\)/, '($1 zu nah am Rand)'],
     [/^(\d+) buildings \((\d+) pitched roofs\) · (\d+) trees · (\d+) highlighted$/, '$1 Gebäude ($2 mit Schrägdach) · $3 Bäume · $4 markiert'],
+    [/^Saved preset "(.*)"\.$/, 'Vorlage „$1" gespeichert.'], [/^(.+) \((\d+) colors\)$/, '$1 ($2 Farben)'],
     [/^Preview at ([\d.]+) mm, export at ([\d.]+) mm$/, 'Vorschau mit $1 mm, Export mit $2 mm'],
   ];
   const norm = s => s.replace(/\s+/g, ' ').trim();
@@ -345,7 +349,7 @@ window.FS = (() => {
     let t = core; for (const [rx, rep] of R) t = t.replace(rx, rep);
     return t === core ? s : m[1] + t + m[3];
   };
-  const orig = new WeakMap(), mine = new WeakMap(), ATTR = ['placeholder', 'title'];
+  const orig = new WeakMap(), mine = new WeakMap(), ATTR = ['placeholder', 'title', 'label'];
   let lang = 'en';
   try { lang = localStorage.getItem('makerLang') || ((navigator.language || '').toLowerCase().startsWith('de') ? 'de' : 'en'); } catch (e) {}
   const skip = el => el && el.closest && el.closest('#map, script, style, #langSw, textarea');
