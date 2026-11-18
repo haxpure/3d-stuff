@@ -83,6 +83,19 @@
   .attr { color:var(--mute); font-size:11px; margin-top:14px; }
   .attr a { color:var(--mute); }
   .hide { display:none !important; }
+  .xsw { display:flex; align-items:center; justify-content:space-between; gap:10px; background:#0f1115; border:1px solid var(--line); border-radius:8px; padding:7px 10px; margin:0 0 10px; color:#c7cbd3; cursor:pointer; user-select:none; }
+  .xsw input { display:none; } .xsw .knob { width:34px; height:18px; border-radius:10px; background:#2a2f39; position:relative; flex:none; transition:background .15s; }
+  .xsw .knob::after { content:''; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:#8b919c; transition:left .15s, background .15s; }
+  .xsw input:checked + .knob { background:#5c4a0c; } .xsw input:checked + .knob::after { left:18px; background:var(--acc); }
+  #simple { border-top:1px solid var(--line); padding:8px 0; }
+  .sfil { display:grid; grid-template-columns:34px 1fr 40px; gap:8px; align-items:center; margin:5px 0; }
+  .sfil input[type=color] { width:34px; height:28px; border:1px solid var(--line); border-radius:6px; background:none; padding:0; }
+  .sfil .t { color:var(--mute); font-size:12px; text-align:right; }
+  .opts { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px; }
+  .opt { background:#0f1115; border:1px solid var(--line); border-radius:8px; padding:6px; cursor:pointer; text-align:left; color:var(--text); font:inherit; width:100%; }
+  .opt:hover { border-color:#4a5160; } .opt.on { border-color:var(--acc); box-shadow:0 0 0 1px var(--acc) inset; }
+  .opt canvas { width:100%; aspect-ratio:160/180; display:block; border-radius:5px; background:#1d2027; image-rendering:auto; }
+  .opt b { display:block; font-size:12px; margin:5px 2px 1px; } .opt small { display:block; color:var(--mute); font-size:11px; margin:0 2px 2px; line-height:1.3; }
   @media (max-width: 820px) { #app { grid-template-columns: 1fr; grid-template-rows: auto 60vh; height:auto; } aside { border-right:0; } main { height:60vh; } }
 </style>
 </head>
@@ -91,6 +104,7 @@
 <aside>
   <h1>Relief <span>Maker</span> V2</h1>
   <div class="sub">Address in, multi-color multi-part 3MF out — with trails, POIs and detailed water.</div>
+  <label class="xsw"><span>Expert settings</span><input type="checkbox" id="expert"><span class="knob"></span></label>
   <div class="seg" id="modeSeg">
     <button type="button" data-mode="center" class="on">Set center</button>
     <button type="button" data-mode="trail">Draw trail</button>
@@ -109,6 +123,17 @@
   <div class="row"><label>Area width<small>km of real terrain across the print</small></label><input type="number" id="areaKm" value="22" min="1" max="200" step="0.5"></div>
   <button id="fetchBtn">Load terrain</button>
   <div id="status"></div>
+
+  <div id="simple">
+    <h3>Your filaments</h3>
+    <div class="hint">The colors loaded in your printer. The suggestions below are made from them.</div>
+    <div id="sFils"></div>
+    <label class="check"><input type="checkbox" id="sFS"> I have the Full Spectrum pack (CMY + White/Gray)</label>
+    <div class="row hide" id="sEdRow"><label>Pack</label><select id="sEd"><option value="white">White Edition</option><option value="gray">Gray Edition</option></select></div>
+    <h3>Suggestions</h3>
+    <div class="hint" id="sHint">Load terrain to see the suggestions.</div>
+    <div class="opts" id="sOpts"></div>
+  </div>
 
   <details open><summary>Print size</summary>
     <div class="row"><label>Map width (mm)</label><input type="number" id="printW" value="160" min="40" max="300"></div>
@@ -220,7 +245,7 @@
     <label class="check"><input type="checkbox" id="poiNames" checked> Show POI names in the preview</label>
   </details>
 
-  <details open><summary>Label strip</summary>
+  <details open id="dLabel"><summary>Label strip</summary>
     <div class="row full"><label>Name<input type="text" id="line1" value="GRAZ · SCHÖCKL"></label></div>
     <div class="row full"><label>Second line <small>auto-filled with coordinates until you edit it</small><input type="text" id="line2" value=""></label></div>
     <div class="row"><label>Strip depth (mm)<small>0 = no label</small></label><input type="number" id="strip" value="18" min="0" max="40" step="1"></div>
@@ -382,6 +407,12 @@ window.FS = (() => {
     'POI in the middle of the map (your address)': 'POI in der Kartenmitte (deine Adresse)', 'Middle POI shape': 'Form des Mitte-POI', 'Center': 'Mitte',
     'Enlarge the map until this trail fits (center stays)': 'Karte vergrößern, bis dieser Weg ganz draufpasst (Mitte bleibt)', 'This trail already fits.': 'Dieser Weg passt schon ganz drauf.',
     'Max. colors': 'Max. Farben', 'the most used colors / mixes are kept': 'die am meisten genutzten Farben / Mischungen bleiben',
+    'Expert settings': 'Experten-Einstellungen', 'Your filaments': 'Deine Filamente', 'The colors loaded in your printer. The suggestions below are made from them.': 'Die Farben, die in deinem Drucker geladen sind. Daraus werden die Vorschläge unten erstellt.',
+    'I have the Full Spectrum pack (CMY + White/Gray)': 'Ich habe das Full-Spectrum-Set (CMY + Weiß/Grau)', 'Pack': 'Set', 'White Edition': 'White Edition', 'Gray Edition': 'Gray Edition',
+    'Suggestions': 'Vorschläge', 'Load terrain to see the suggestions.': 'Lade das Gelände, um die Vorschläge zu sehen.', 'Smooth gradient': 'Weicher Verlauf',
+    'Natural terrain colors mixed from the pack.': 'Natürliche Geländefarben, aus dem Set gemischt.', 'Your colors with mixed transitions. The slicer mixes them.': 'Deine Farben mit gemischten Übergängen. Der Slicer mischt sie.',
+    'Real colors from satellite imagery, mixed from the pack.': 'Echte Farben aus dem Satellitenbild, aus dem Set gemischt.', 'Real colors from satellite imagery, using your colors and their mixes.': 'Echte Farben aus dem Satellitenbild, aus deinen Farben und ihren Mischungen.',
+    'Light blue': 'Hellblau',
     // --- Full Spectrum mode ---
     'Full Spectrum pack (CMY + W/G)': 'Full-Spectrum-Set (CMY + W/G)', 'Filament pack': 'Filament-Set', 'T1 Cyan · T2 Magenta · T3 Yellow · T4 White / Gray': 'T1 Cyan · T2 Magenta · T3 Gelb · T4 Weiß / Grau',
     'Full Spectrum White Edition': 'Full Spectrum White Edition', 'Full Spectrum Gray Edition': 'Full Spectrum Gray Edition', 'Your colors (Full Spectrum)': 'Deine Farben (Full Spectrum)',
@@ -392,6 +423,7 @@ window.FS = (() => {
   };
   // patterns for messages that contain numbers or names (applied in order)
   const R = [
+    [/^(.+) terrain with (.+) contour lines\.$/, 'Gelände in $1 mit Höhenlinien in $2.'],
     [/^Elevation tiles (\d+)\/(\d+) \(zoom (\d+)\)…$/, 'Höhendaten $1/$2 (Zoom $3)…'], [/^Imagery tiles (\d+)\/(\d+) \(zoom (\d+)\)…$/, 'Satellitenbild $1/$2 (Zoom $3)…'],
     [/^Found (\d+) matches — using the first, click another to switch\.$/, '$1 Treffer – der erste wird verwendet, klicke einen anderen zum Wechseln.'],
     [/^Nothing found for "(.*)"\.$/, 'Nichts gefunden für „$1".'], [/^Could not read the coordinates — use e\.g\. "(.*)"\.$/, 'Koordinaten nicht lesbar – z. B. „$1" verwenden.'],
@@ -419,6 +451,8 @@ window.FS = (() => {
     [/\((\d+) too close to the edge\)/, '($1 zu nah am Rand)'],
     [/^(\d+) buildings \((\d+) pitched roofs\) · (\d+) trees · (\d+) highlighted$/, '$1 Gebäude ($2 mit Schrägdach) · $3 Bäume · $4 markiert'],
     [/^Saved preset "(.*)"\.$/, 'Vorlage „$1" gespeichert.'], [/^(.+) \((\d+) colors\)$/, '$1 ($2 Farben)'],
+    [/^(\d+) colors from low to high, water in (.+)\. One color swap per band\.$/, '$1 Farben von tief nach hoch, Wasser in $2. Ein Farbwechsel pro Stufe.'],
+    [/^(\d+) colors from low to high\. One color swap per band\.$/, '$1 Farben von tief nach hoch. Ein Farbwechsel pro Stufe.'],
     [/^Preview at ([\d.]+) mm, export at ([\d.]+) mm$/, 'Vorschau mit $1 mm, Export mit $2 mm'],
   ];
   const norm = s => s.replace(/\s+/g, ' ').trim();
@@ -1859,6 +1893,116 @@ function expandBands(bands, steps, T, fils, nextTool) {
 }
 const asgIds = () => { const A = PAL().asg; return { base: +A.base, water: +A.water, trail: +A.trail, poi: +A.poi, text: +A.text }; };
 
+// ===== simple mode: your filaments in, 4 ready-made looks out =====
+COL.simple ??= { fils: [['Yellow', '#f6c21c'], ['Gray', '#a3a6aa'], ['Light blue', '#5fc3d6'], ['Black', '#17181b']], fs: false, ed: 'white', pick: -1 };
+const S_FS = { white: [['Cyan', '#00C3FF'], ['Magenta', '#F54399'], ['Yellow', '#FAE727'], ['White', '#F2F2EF']], gray: [['Cyan', '#08ABFB'], ['Magenta', '#D93B90'], ['Yellow', '#F9ED3D'], ['Gray', '#A9A6A1']] };
+let EXPERT = false; try { EXPERT = localStorage.getItem('reliefMakerExpert') === '1'; } catch (e) {}
+function applyExpert() {
+  $('expert').checked = EXPERT; $('simple').classList.toggle('hide', EXPERT);
+  for (const d of document.querySelectorAll('aside details')) d.classList.toggle('hide', !EXPERT && d.id !== 'dLabel');
+  if (!EXPERT) queueSuggestions(true);
+}
+$('expert').addEventListener('change', () => { EXPERT = $('expert').checked; try { localStorage.setItem('reliefMakerExpert', EXPERT ? '1' : '0'); } catch (e) {} applyExpert(); });
+function renderSimpleFils() {
+  const S = COL.simple, box = $('sFils'); box.innerHTML = '';
+  const list = S.fs ? S_FS[S.ed] : S.fils;
+  list.forEach((f, i) => {
+    const col = mk('input', { type: 'color', value: f[1], disabled: S.fs }), nm = mk('input', { type: 'text', value: f[0], disabled: S.fs, placeholder: 'Filament name' });
+    col.addEventListener('input', () => { S.fils[i][1] = col.value; saveCOL(); queueSuggestions(true); refreshPick(); });
+    nm.addEventListener('input', () => { S.fils[i][0] = nm.value; saveCOL(); });
+    nm.addEventListener('change', () => { queueSuggestions(true); refreshPick(); });
+    box.append(mk('div', { className: 'sfil' }, col, nm, mk('span', { className: 't', textContent: 'T' + (i + 1) })));
+  });
+  $('sFS').checked = S.fs; $('sEd').value = S.ed; $('sEdRow').classList.toggle('hide', !S.fs);
+}
+$('sFS').addEventListener('change', () => { COL.simple.fs = $('sFS').checked; saveCOL(); renderSimpleFils(); queueSuggestions(true); refreshPick(); });
+$('sEd').addEventListener('change', () => { COL.simple.ed = $('sEd').value; saveCOL(); renderSimpleFils(); queueSuggestions(true); refreshPick(); });
+// keep the chosen look in sync with the filaments
+let pickTimer; function refreshPick() { clearTimeout(pickTimer); pickTimer = setTimeout(() => { if (!EXPERT && COL.simple.pick >= 0) applySuggestion(COL.simple.pick); }, 300); }
+// the 4 suggestions: each one is a full color setup (mode, palette, assignments) applied to COL
+function suggestionList() {
+  const S = COL.simple, src = S.fs ? S_FS[S.ed] : S.fils, m = state.lastModel, lo = m ? m.hmin : 350, hi = m ? m.hmax : 1450;
+  const F = src.map((f, i) => ({ id: i + 1, name: f[0], color: f[1], tool: i + 1, real: true }));
+  const rgb = f => hex2rgb(f.color), lum = f => { const [r, g, b] = rgb(f); return 0.299 * r + 0.587 * g + 0.114 * b; };
+  const satu = f => { const c = rgb(f); return Math.max(...c) - Math.min(...c); }, blue = f => { const [r, g, b] = rgb(f); return b - Math.max(r, g) + (g > r ? (g - r) / 3 : 0); };
+  const byLum = F.slice().sort((a, b) => lum(a) - lum(b)), dark = byLum[0], light = byLum[F.length - 1];
+  const wCand = F.slice().sort((a, b) => blue(b) - blue(a))[0], water = blue(wCand) > 25 ? wCand : null;
+  const T = F.filter(f => f !== water).sort((a, b) => lum(a) - lum(b));
+  const neutral = (T.length > 2 ? T.filter(f => f !== dark) : T).slice().sort((a, b) => satu(a) - satu(b))[0];
+  const accent = F.filter(f => f !== neutral && f !== water && f !== dark).sort((a, b) => satu(b) - satu(a))[0] || light;
+  // band edges at elevation quantiles: every color covers about the same area of the map
+  let qs = null; if (m && m.Hs) { const st = Math.max(1, Math.floor(m.Hs.length / 20000)), smp = []; for (let i = 0; i < m.Hs.length; i += st) smp.push(m.Hs[i]); smp.sort((a, b) => a - b); qs = q => smp[Math.min(smp.length - 1, Math.floor(q * smp.length))]; }
+  const bands = list => list.map((f, i) => ({ fil: f.id, upTo: i === list.length - 1 ? 99999 : Math.round(qs ? qs((i + 1) / list.length) : lo + (hi - lo) * (i + 1) / list.length) }));
+  const pal = (asg, b) => ({ fils: F.map(f => ({ ...f })), asg: { base: dark.id, core: dark.id, terrain: neutral.id, text: light === dark ? accent.id : light.id, water: (water || dark).id, trail: accent.id, poi: accent.id, rock: -1, ...asg }, next: 5, bands: b, slopeDeg: 35 });
+  const hasW = !!water;
+  return [
+    { title: 'Elevation bands', desc: `${T.length} colors from low to high${hasW ? ', water in ' + water.name : ''}. One color swap per band.`,
+      set: c => { c.mode = 'four'; c.style4 = 'bands'; c.custom = pal({}, bands(T)); c.realContours = false; } },
+    { title: 'Contour lines', desc: `${neutral.name} terrain with ${accent.name} contour lines.`,
+      set: c => { c.mode = 'four'; c.style4 = 'contour'; c.custom = pal({ text: accent.id }, bands(T)); c.realContours = false; } },
+    { title: 'Smooth gradient', desc: S.fs ? 'Natural terrain colors mixed from the pack.' : 'Your colors with mixed transitions. The slicer mixes them.',
+      set: c => { c.realContours = false; c.styleN = 'bands';
+        if (S.fs) { c.mode = 'fs'; c.fsEd = S.ed; c.fs = palFrom(PRESETS.grad8, lo, hi); c.gSteps = 1; c.blendM = Math.round((hi - lo) / 10); }
+        else { c.mode = 'multi'; c.real = pal({}, bands(T)); c.gSteps = 3; c.blendM = Math.round((hi - lo) / Math.max(2, T.length) * 0.8); } } },
+    { title: 'Satellite colors', desc: S.fs ? 'Real colors from satellite imagery, mixed from the pack.' : 'Real colors from satellite imagery, using your colors and their mixes.',
+      set: c => { c.realContours = false; c.styleN = 'real'; c.maxCols = 10;
+        if (S.fs) { c.mode = 'fs'; c.fsEd = S.ed; c.fs = palFrom(PRESETS.satellite, lo, hi); }
+        else { c.mode = 'multi'; c.real = pal({}, bands(T)); c.gSteps = 2; } }, needsImg: true },
+  ];
+}
+// small top-down preview: plan colors on the terrain, shaded
+function drawThumb(cv, p, m, plan, rgbOf, A) {
+  const { nx, ny, Zc, TR, W, TM } = m, w = nx, h = ny;
+  cv.width = w; cv.height = h; const ctx = cv.getContext('2d'), img = ctx.createImageData(w, h);
+  const slabCol = z => { const sl = plan.slabs.find(q => z >= q.z0 && z < q.z1) || plan.slabs[plan.slabs.length - 1]; return rgbOf(sl.fil); };
+  const wc = rgbOf(+A.water), tc = rgbOf(+A.trail), L = [-0.5, 0.6, 0.62];
+  for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) {
+    const i = r * nx + c, top = Zc[i] + TR[i];
+    let col;
+    if (W[i]) col = wc; else if (TM[i]) col = tc;
+    else if (plan.skin) { const { C, cw, ch } = plan.skin; col = rgbOf(C[Math.min(r, ch - 1) * cw + Math.min(c, cw - 1)]); }
+    else col = slabCol(Zc[i] - 1e-3);
+    const zx = (Zc[r * nx + Math.min(c + 1, nx - 1)] - Zc[r * nx + Math.max(c - 1, 0)]) / (2 * m.dx), zy = (Zc[Math.min(r + 1, ny - 1) * nx + c] - Zc[Math.max(r - 1, 0) * nx + c]) / (2 * m.dy);
+    const nl = Math.hypot(zx, zy, 1), sh = 0.55 + 0.6 * Math.max(0, (-zx * L[0] - zy * L[1] + L[2]) / nl);
+    const o = ((h - 1 - r) * w + c) * 4; img.data[o] = Math.min(255, col[0] * sh); img.data[o + 1] = Math.min(255, col[1] * sh); img.data[o + 2] = Math.min(255, col[2] * sh); img.data[o + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+}
+let sugKey = '', sugTimer = null;
+function queueSuggestions(force) { if (force) sugKey = ''; clearTimeout(sugTimer); sugTimer = setTimeout(renderSuggestions, 250); }
+function renderSuggestions() {
+  if (EXPERT) return;
+  const box = $('sOpts');
+  if (!state.dem) { box.innerHTML = ''; $('sHint').classList.remove('hide'); return; }
+  const p = params(), key = JSON.stringify([p.lat, p.lon, p.areaKm, p.printW, p.printD, p.vex, p.smooth, !!state.water, state.img && state.img.key, COL.simple, FEAT.trails.length]);
+  if (key === sugKey) return; sugKey = key;
+  $('sHint').classList.add('hide');
+  const m = computeModel(p, state.dem, featsFor(), Math.max(p.printW / 110, p.pitch));
+  const saved = JSON.stringify(COL), savedVirt = state.virt, list = suggestionList(), needImg = [];
+  box.innerHTML = '';
+  list.forEach((o, k) => {
+    const cv = mk('canvas'), btn = mk('button', { type: 'button', className: 'opt' + (COL.simple.pick === k ? ' on' : '') }, cv, mk('b', { textContent: o.title }), mk('small', { textContent: o.desc }));
+    btn.addEventListener('click', () => applySuggestion(k));
+    box.append(btn);
+    if (o.needsImg && !state.img) { needImg.push(cv); const ctx = cv.getContext('2d'); cv.width = 160; cv.height = 180; ctx.fillStyle = '#8b919c'; ctx.font = '12px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('Satellite image…', 80, 92); return; }
+    try {
+      o.set(COL); fixRefs(); ensureBands();
+      const plan = makePlan(p, m, colorCfg(p, m));
+      const rgbOf = id => { const f = filById(id); return f ? hex2rgb(f.color) : [136, 136, 136]; };
+      drawThumb(cv, p, m, plan, rgbOf, PAL().asg);
+    } catch (e) { console.warn('suggestion', k, e); }
+    COL = JSON.parse(saved);
+  });
+  state.virt = savedVirt;
+  if (needImg.length) ensureImagery().then(() => queueSuggestions(true)).catch(() => {});
+}
+function applySuggestion(k) {
+  const o = suggestionList()[k]; if (!o) return;
+  o.set(COL); COL.simple.pick = k; colorsChanged(true);
+  for (const [i, b] of [...$('sOpts').children].entries()) b.classList.toggle('on', i === k);
+  if (o.needsImg) ensureImagery().catch(() => {});
+}
+
 async function rebuildPreview() {
   if (!state.dem) return;
   const p = params();
@@ -1926,6 +2070,7 @@ async function rebuildPreview() {
   const fits = p.printW <= p.bed && p.printD + p.strip <= p.bed;
   const nT = FEAT.trails.filter(t => t.on).length, nP = m.prisms.length;
   const modeTxt = ({ four: '4 colors · ', multi: 'more colors · ', fs: 'Full Spectrum · ' }[COL.mode]) + (imode() === 'real' && !state.img ? 'satellite (imagery loading…)' : { contour: 'contour lines', bands: COL.mode === 'four' ? 'elevation bands' : 'elevation gradient', real: 'satellite colors' }[imode()]) + (state.virt.length ? ` · ${state.virt.length} mix colors` : '');
+  if (!EXPERT) queueSuggestions(false);
   $('hud').innerHTML = `<b>${p.printW.toFixed(0)} × ${(p.printD + p.strip).toFixed(0)} × ${m.zmax.toFixed(1)} mm</b>${fits ? '' : ' <span style="color:#ff7a6b">larger than bed</span>'}<br>` +
     `Elevation ${m.hmin.toFixed(0)}–${m.hmax.toFixed(0)} m · scale 1:${Math.round(1e6 / m.scale).toLocaleString('de-AT')}<br>` +
     `${modeTxt} · ${used.size} filaments on ${tools.length} tools (${tools.map(t => 'T' + t).join(' ')})<br>` +
@@ -2013,7 +2158,7 @@ $('dlStl').addEventListener('click', async () => {
   finally { busy(false); }
 });
 
-fixRefs(); ensureBands(); renderColors(); renderFeatLists(); drawFeatures();
+fixRefs(); ensureBands(); renderColors(); renderFeatLists(); drawFeatures(); renderSimpleFils(); applyExpert();
 loadArea();
 </script>
 </body>

@@ -92,6 +92,12 @@
     'POI in the middle of the map (your address)': 'POI in der Kartenmitte (deine Adresse)', 'Middle POI shape': 'Form des Mitte-POI', 'Center': 'Mitte',
     'Enlarge the map until this trail fits (center stays)': 'Karte vergrößern, bis dieser Weg ganz draufpasst (Mitte bleibt)', 'This trail already fits.': 'Dieser Weg passt schon ganz drauf.',
     'Max. colors': 'Max. Farben', 'the most used colors / mixes are kept': 'die am meisten genutzten Farben / Mischungen bleiben',
+    'Expert settings': 'Experten-Einstellungen', 'Your filaments': 'Deine Filamente', 'The colors loaded in your printer. The suggestions below are made from them.': 'Die Farben, die in deinem Drucker geladen sind. Daraus werden die Vorschläge unten erstellt.',
+    'I have the Full Spectrum pack (CMY + White/Gray)': 'Ich habe das Full-Spectrum-Set (CMY + Weiß/Grau)', 'Pack': 'Set', 'White Edition': 'White Edition', 'Gray Edition': 'Gray Edition',
+    'Suggestions': 'Vorschläge', 'Load terrain to see the suggestions.': 'Lade das Gelände, um die Vorschläge zu sehen.', 'Smooth gradient': 'Weicher Verlauf',
+    'Natural terrain colors mixed from the pack.': 'Natürliche Geländefarben, aus dem Set gemischt.', 'Your colors with mixed transitions. The slicer mixes them.': 'Deine Farben mit gemischten Übergängen. Der Slicer mischt sie.',
+    'Real colors from satellite imagery, mixed from the pack.': 'Echte Farben aus dem Satellitenbild, aus dem Set gemischt.', 'Real colors from satellite imagery, using your colors and their mixes.': 'Echte Farben aus dem Satellitenbild, aus deinen Farben und ihren Mischungen.',
+    'Light blue': 'Hellblau',
     // --- Full Spectrum mode ---
     'Full Spectrum pack (CMY + W/G)': 'Full-Spectrum-Set (CMY + W/G)', 'Filament pack': 'Filament-Set', 'T1 Cyan · T2 Magenta · T3 Yellow · T4 White / Gray': 'T1 Cyan · T2 Magenta · T3 Gelb · T4 Weiß / Grau',
     'Full Spectrum White Edition': 'Full Spectrum White Edition', 'Full Spectrum Gray Edition': 'Full Spectrum Gray Edition', 'Your colors (Full Spectrum)': 'Deine Farben (Full Spectrum)',
@@ -102,6 +108,7 @@
   };
   // patterns for messages that contain numbers or names (applied in order)
   const R = [
+    [/^(.+) terrain with (.+) contour lines\.$/, 'Gelände in $1 mit Höhenlinien in $2.'],
     [/^Elevation tiles (\d+)\/(\d+) \(zoom (\d+)\)…$/, 'Höhendaten $1/$2 (Zoom $3)…'], [/^Imagery tiles (\d+)\/(\d+) \(zoom (\d+)\)…$/, 'Satellitenbild $1/$2 (Zoom $3)…'],
     [/^Found (\d+) matches — using the first, click another to switch\.$/, '$1 Treffer – der erste wird verwendet, klicke einen anderen zum Wechseln.'],
     [/^Nothing found for "(.*)"\.$/, 'Nichts gefunden für „$1".'], [/^Could not read the coordinates — use e\.g\. "(.*)"\.$/, 'Koordinaten nicht lesbar – z. B. „$1" verwenden.'],
@@ -129,6 +136,8 @@
     [/\((\d+) too close to the edge\)/, '($1 zu nah am Rand)'],
     [/^(\d+) buildings \((\d+) pitched roofs\) · (\d+) trees · (\d+) highlighted$/, '$1 Gebäude ($2 mit Schrägdach) · $3 Bäume · $4 markiert'],
     [/^Saved preset "(.*)"\.$/, 'Vorlage „$1" gespeichert.'], [/^(.+) \((\d+) colors\)$/, '$1 ($2 Farben)'],
+    [/^(\d+) colors from low to high, water in (.+)\. One color swap per band\.$/, '$1 Farben von tief nach hoch, Wasser in $2. Ein Farbwechsel pro Stufe.'],
+    [/^(\d+) colors from low to high\. One color swap per band\.$/, '$1 Farben von tief nach hoch. Ein Farbwechsel pro Stufe.'],
     [/^Preview at ([\d.]+) mm, export at ([\d.]+) mm$/, 'Vorschau mit $1 mm, Export mit $2 mm'],
   ];
   const norm = s => s.replace(/\s+/g, ' ').trim();
