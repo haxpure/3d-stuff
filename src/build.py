@@ -15,4 +15,6 @@ for k, v in [('/*CORE*/', core), ('/*EARCUT*/', rd('earcut_inline.js')), ('/*TOW
              ('/*DEM*/', cut('const tileCache', 'const waterCache').replace('let z = 14;', 'let z = 15;')), ('/*LABEL*/', cut('async function textCanvas', '// ---------- 3D preview'))]:
     assert k in t, k; t = t.replace(k, v)
 open(os.path.join(R, 'town-maker.html'), 'w', encoding='utf-8').write(t.replace('<!--I18N-->', I18N))
-print('built relief-maker.html, town-maker.html')
+# Fin Studio is maintained as one self-contained file
+open(os.path.join(R, 'fin-studio.html'), 'w', encoding='utf-8').write(rd('fin_studio.html'))
+print('built relief-maker.html, town-maker.html, fin-studio.html')
