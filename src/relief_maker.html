@@ -135,6 +135,7 @@
     </select></div>
     <div class="row" id="rowEd"><label>Filament pack<small>T1 Cyan · T2 Magenta · T3 Yellow · T4 White / Gray</small></label><select id="fsEd"><option value="white">Full Spectrum White Edition</option><option value="gray">Full Spectrum Gray Edition</option></select></div>
     <div class="row"><label>Coloring</label><select id="colStyle"></select></div>
+    <label class="check" id="rowRealContours"><input type="checkbox" id="realContours"> Draw contour lines on top</label>
     <h3 id="filTitle">Your 4 filaments</h3>
     <div class="hint" id="filHint"></div>
     <div id="filList" class="list"></div>
@@ -159,7 +160,7 @@
       <label class="check"><input type="checkbox" id="autoLevels" checked> Auto-levels (stretch dark imagery)</label>
       <div class="row"><label>Saturation</label><div class="rng"><input type="range" id="sat" min="0.5" max="2.5" step="0.05" value="1.3"><output></output></div></div>
       <div class="row"><label>Cleanup<small>removes single-pixel speckles</small></label><div class="rng"><input type="range" id="cleanup" min="0" max="5" step="1" value="2"><output></output></div></div>
-      <label class="check"><input type="checkbox" id="realContours"> Draw contour lines on top</label>
+      <div class="row" id="rowMaxCols"><label>Max. colors<small>the most used colors / mixes are kept</small></label><input type="number" id="maxCols" value="12" min="2" max="40" step="1"></div>
       <div class="row"><label>Filaments from imagery<small>replaces the "R" filaments</small></label><div style="display:grid;grid-template-columns:52px 1fr;gap:6px"><input type="number" id="kN" value="6" min="2" max="12"><button type="button" id="kBtn" class="sec" style="padding:6px">Create</button></div></div>
     </div>
     <div id="pSkin" class="row"><label>Color skin (mm)<small>depth of the colored surface layer</small></label><input type="number" id="skin" value="0.6" min="0.2" max="2" step="0.1"></div>
@@ -600,13 +601,13 @@ function makePlan(p, m, cfg) {
   const useSkin = cfg.mode === 'real' || (cfg.mode === 'bands' && cfg.rockFil >= 0);
   if (!useSkin) {
     const cuts = new Set([p.base]);
-    for (const s of sheets) { cuts.add(s[0]); cuts.add(s[1]); }
+    if (cfg.mode === 'contour' || cfg.realContours) for (const s of sheets) { cuts.add(s[0]); cuts.add(s[1]); }
     if (cfg.mode === 'bands') for (let k = 0; k < bands.length - 1; k++) if (bandZ[k] > p.base) cuts.add(bandZ[k]);
     const zs = [...cuts].sort((a, b) => a - b); zs.push(1e9);
     const slabs = [];
     for (let k = 0; k < zs.length - 1; k++) {
       const a = zs[k], b = zs[k + 1], mid = b > 1e8 ? a + 1e-3 : (a + b) / 2;
-      const fil = sheets.some(s => mid > s[0] && mid < s[1]) ? cfg.accentFil : cfg.mode === 'bands' ? bandAtZ(mid) : cfg.terrainFil;
+      const fil = (cfg.mode === 'contour' || cfg.realContours) && sheets.some(s => mid > s[0] && mid < s[1]) ? cfg.accentFil : cfg.mode === 'bands' ? bandAtZ(mid) : cfg.terrainFil;
       const last = slabs[slabs.length - 1];
       if (last && last.fil === fil) last.z1 = b; else slabs.push({ z0: a, z1: b, fil });
     }
@@ -625,7 +626,7 @@ function makePlan(p, m, cfg) {
       C[r * cw + c] = Math.hypot(sx, sy) > tanT ? cfg.rockFil : bandAtE((Hs[a] + Hs[b] + Hs[d] + Hs[e]) / 4);
     }
   }
-  if (sheets.length && (cfg.mode === 'bands' || cfg.realContours))
+  if (sheets.length && cfg.realContours)
     for (let r = 0; r < ch; r++) for (let c = 0; c < cw; c++) {
       const a = r * nx + c, v = [Zc[a], Zc[a + 1], Zc[a + nx], Zc[a + nx + 1]];
       const lo = Math.min(...v), hi = Math.max(...v);
@@ -892,7 +893,7 @@ let COL = null;
 try { COL = JSON.parse(localStorage.getItem('reliefMakerColors3') || 'null'); } catch (e) {}
 if (!COL || !COL.custom || !COL.real || COL.custom.fils.length !== 4 || !['four', 'multi', 'fs'].includes(COL.mode))
   COL = { mode: 'four', style4: 'bands', styleN: 'bands', custom: presetPal('alpine4', 350, 1450), real: presetPal('grad8', 350, 1450), skin: 0.6, imgSrc: 'esri', autoLevels: true, sat: 1.3, cleanup: 2, realContours: false, kN: 6, blendM: 80, gSteps: 3 };
-COL.blendM ??= 80; COL.gSteps ??= 3; COL.fsEd ??= 'white'; if (!COL.fs) COL.fs = presetPal('grad8', 350, 1450);
+COL.blendM ??= 80; COL.gSteps ??= 3; COL.maxCols ??= 12; COL.fsEd ??= 'white'; if (!COL.fs) COL.fs = presetPal('grad8', 350, 1450);
 const PAL = () => COL.mode === 'fs' ? COL.fs : COL.mode === 'multi' ? COL.real : COL.custom;
 // internal coloring mode: 'contour' | 'bands' | 'real'
 const imode = () => COL.mode === 'four' ? COL.style4 : (COL.styleN === 'real' ? 'real' : 'bands');
@@ -918,7 +919,17 @@ function fixRefs() {
     }
   }
 }
-function colorsChanged(rerender) { fixRefs(); saveCOL(); if (rerender) renderColors(); schedule(); }
+// bands with fewer than 2 different colors (e.g. the "Classic" contour preset) get automatic bands:
+// every color except the water color, dark at the bottom, light at the top
+function autoBands(pal) {
+  const m = state.lastModel, lo = m ? m.hmin : 350, hi = m ? m.hmax : 1450;
+  let c = pal.fils.filter(f => f.id !== +pal.asg.water); if (c.length < 2) c = pal.fils.slice();
+  const lum = f => { const [r, g, b] = hex2rgb(f.color); return 0.299 * r + 0.587 * g + 0.114 * b; };
+  c.sort((a, b) => lum(a) - lum(b));
+  return c.map((f, i) => ({ fil: f.id, upTo: i === c.length - 1 ? 99999 : Math.round(lo + (hi - lo) * (i + 1) / c.length) }));
+}
+function ensureBands() { const pal = PAL(); if (imode() === 'bands' && new Set((pal.bands || []).map(b => +b.fil)).size < 2) pal.bands = autoBands(pal); }
+function colorsChanged(rerender) { fixRefs(); ensureBands(); saveCOL(); if (rerender) renderColors(); schedule(); }
 
 function filSelect(value, onChange, none) {
   const s = mk('select');
@@ -979,13 +990,15 @@ function renderColors() {
   });
   $('colMode').value = COL.mode; $('slopeDeg').value = C.slopeDeg;
   const cs = $('colStyle'); cs.innerHTML = ''; for (const [v, l] of STYLES[COL.mode]) cs.add(new Option(l, v)); cs.value = COL.mode === 'four' ? COL.style4 : COL.styleN;
-  for (const id of ['skin', 'imgSrc', 'sat', 'cleanup', 'kN', 'blendM', 'gSteps']) $(id).value = COL[id];
-  $('rowSteps').classList.toggle('hide', !real); $('rowBlend').classList.toggle('hide', !real);
+  for (const id of ['skin', 'imgSrc', 'sat', 'cleanup', 'kN', 'blendM', 'gSteps', 'maxCols']) $(id).value = COL[id];
+  $('rowSteps').classList.toggle('hide', !real || fsm); $('rowBlend').classList.toggle('hide', !real || sat);
+  if (sat && real && !fsm && !$('pReal').contains($('rowSteps'))) $('pReal').append($('rowSteps')); if (!sat && !$('pBands').contains($('rowSteps'))) $('rowBlend').after($('rowSteps'));
   $('rowEd').classList.toggle('hide', !fsm); $('fsEd').value = COL.fsEd;
   for (const id of ['autoLevels', 'realContours']) $(id).checked = COL[id];
   for (const r of document.querySelectorAll('#pReal .rng input')) r._fmt();
   const im = imode();
   $('pContour').classList.toggle('hide', im !== 'contour');
+  $('rowRealContours').classList.toggle('hide', im === 'contour');
   $('pBands').classList.toggle('hide', im !== 'bands');
   $('pReal').classList.toggle('hide', !sat);
   $('filTools').classList.toggle('hide', !real);
@@ -996,7 +1009,7 @@ $('colMode').addEventListener('change', () => { COL.mode = $('colMode').value; c
 $('fsEd').addEventListener('change', () => { COL.fsEd = $('fsEd').value; colorsChanged(true); });
 $('colStyle').addEventListener('change', () => { if (COL.mode === 'four') COL.style4 = $('colStyle').value; else COL.styleN = $('colStyle').value; colorsChanged(true); if (imode() === 'real') ensureImagery().catch(() => {}); });
 $('slopeDeg').addEventListener('input', () => { PAL().slopeDeg = +$('slopeDeg').value; colorsChanged(false); });
-for (const id of ['skin', 'sat', 'cleanup', 'kN', 'blendM', 'gSteps']) $(id).addEventListener('input', () => { COL[id] = +$(id).value; colorsChanged(false); });
+for (const id of ['skin', 'sat', 'cleanup', 'kN', 'blendM', 'gSteps', 'maxCols']) $(id).addEventListener('input', () => { COL[id] = +$(id).value; colorsChanged(false); });
 for (const id of ['autoLevels', 'realContours']) $(id).addEventListener('change', () => { COL[id] = $(id).checked; colorsChanged(false); });
 $('imgSrc').addEventListener('change', () => { COL.imgSrc = $('imgSrc').value; colorsChanged(false); ensureImagery().catch(() => {}); });
 $('filAdd').addEventListener('click', () => { const R = PAL(), t = Math.min(32, Math.max(0, ...R.fils.map(f => f.tool)) + 1); R.fils.push({ id: R.next++, name: 'New color', color: '#888888', tool: t, real: true }); colorsChanged(true); });
@@ -1029,7 +1042,6 @@ $('preset').addEventListener('change', () => {
     if (pal.fils.length !== 4) { setStatus('This preset has more than 4 colors — switch the mode to "More colors" to use it.', true); return; }
     COL.custom = pal; COL.style4 = P.mode === 'contour' ? 'contour' : 'bands';
   } else {
-    if (!pal.bands || pal.bands.length < 2) pal.bands = pal.fils.filter(f => f.id !== pal.asg.base && f.id !== pal.asg.water && f.id !== pal.asg.text).map((f, i, a) => ({ fil: f.id, upTo: Math.round((m ? m.hmin : 350) + ((m ? m.hmax : 1450) - (m ? m.hmin : 350)) * (i + 1) / a.length) }));
     if (COL.mode === 'fs') COL.fs = pal; else COL.real = pal;
     COL.styleN = P.mode === 'real' ? 'real' : 'bands';
   }
@@ -1368,11 +1380,31 @@ async function ensureImagery() {
   return pr;
 }
 let realCache = null;
+const lerpLin = (h1, h2, t) => { const a = hex2rgb(h1), b = hex2rgb(h2), L = v => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }, S = v => 255 * (v <= 0.0031308 ? v * 12.92 : 1.055 * v ** (1 / 2.4) - 0.055); return rgb2hex(a.map((x, i) => S(L(x) + (L(b[i]) - L(x)) * t))); };
+// satellite colors: candidates = your "R" colors + their mixes (More colors) or every mix of the pack (Full Spectrum);
+// the most used ones (max. colors) are kept, every mix becomes a placeholder filament
 function realCells(p, m) {
-  const pal = COL.real.fils.filter(f => f.real); const use = pal.length ? pal : COL.real.fils;
+  const pal = PAL(), base = pal.fils.filter(f => f.real), use = base.length ? base : pal.fils;
   const key = [state.img.key, m.nx, m.ny, COL.autoLevels, COL.sat].join('|');
   if (!realCache || realCache.key !== key) realCache = { key, px: adjustColors(imageryCells(p, m, state.img.sample), COL.autoLevels, COL.sat) };
-  return quantizeCells(realCache.px, use.map(f => ({ id: f.id, lab: rgb2lab(...hex2rgb(f.color)) })), m.nx - 1, m.ny - 1, COL.cleanup);
+  const cw = m.nx - 1, ch = m.ny - 1;
+  let cand = use.map(f => ({ id: f.id, color: f.color }));
+  if (COL.mode === 'fs') cand = FS.gamut(COL.fsEd).map((g, i) => ({ id: 7000 + i, name: 'Mix ' + g.recipe, color: g.hex, mix: true }));
+  else if (COL.mode === 'multi' && COL.gSteps > 0) {
+    const n = Math.min(10, COL.gSteps | 0); let vid = 6000;
+    for (let i = 0; i < use.length; i++) for (let j = i + 1; j < use.length; j++) for (let k = 1; k <= n; k++) {
+      const t = k / (n + 1); cand.push({ id: vid++, name: `${use[i].name} + ${use[j].name} ${Math.round(t * 100)}/${Math.round((1 - t) * 100)}`.replace(/ (\d+)\/(\d+)$/, (q, a2, b2) => ` ${b2}/${a2}`), color: lerpLin(use[i].color, use[j].color, t), mix: true });
+    }
+  }
+  const lab = cand.map(c => ({ id: c.id, lab: rgb2lab(...hex2rgb(c.color)) }));
+  let C = quantizeCells(realCache.px, lab, cw, ch, 0);
+  const cnt = new Map(); for (const v of C) cnt.set(v, (cnt.get(v) || 0) + 1);
+  const keep = new Set([...cnt].sort((a, b) => b[1] - a[1]).slice(0, Math.max(2, COL.maxCols | 0)).map(e => e[0]));
+  if (keep.size < cnt.size) C = quantizeCells(realCache.px, lab.filter(q => keep.has(q.id)), cw, ch, 0);
+  if (COL.cleanup > 0) majority(C, cw, ch, COL.cleanup);
+  const used = new Set(C); let t0 = Math.max(0, ...pal.fils.map(f => f.tool));
+  state.virt = cand.filter(c => c.mix && used.has(c.id)).map(c => ({ id: c.id, name: c.name, color: c.color, tool: ++t0, mix: true }));
+  return C;
 }
 
 // ---------- OpenStreetMap (Overpass) ----------
@@ -1558,8 +1590,8 @@ function colorCfg(p, m) {
     const ex = expandBands(cfg.bands, Math.min(10, COL.gSteps | 0), +COL.blendM, Cu.fils, Math.max(0, ...Cu.fils.map(f => f.tool)) + 1);
     cfg.bands = ex.bands; state.virt = ex.virt;
   }
-  if (COL.mode === 'fs') fsReset();
   if (cfg.mode === 'real') { if (state.img) cfg.cellColors = realCells(p, m); else { cfg.mode = 'contour'; cfg.terrainFil = +A.core; } }
+  if (COL.mode === 'fs') fsReset();
   return cfg;
 }
 // insert intermediate placeholder colors at every band edge (mixing happens in the slicer)
@@ -1738,7 +1770,7 @@ $('dlStl').addEventListener('click', async () => {
   finally { busy(false); }
 });
 
-fixRefs(); renderColors(); renderFeatLists(); drawFeatures();
+fixRefs(); ensureBands(); renderColors(); renderFeatLists(); drawFeatures();
 loadArea();
 </script>
 </body>
