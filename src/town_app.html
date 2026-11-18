@@ -50,7 +50,11 @@
   .pal { display:grid; grid-template-columns: repeat(4, 1fr); gap:6px; margin:6px 0 10px; }
   .pal label { display:flex; flex-direction:column; align-items:center; gap:3px; color:var(--mute); font-size:11px; }
   .pal input[type=color] { width:100%; height:30px; border:1px solid var(--line); border-radius:6px; background:none; padding:0; }
-  .role { display:grid; grid-template-columns: 14px 1fr 70px; gap:8px; align-items:center; margin:5px 0; }
+  .role { display:grid; grid-template-columns: 14px 1fr auto; gap:8px; align-items:center; margin:5px 0; }
+  .role select { width:70px; }
+  .role .fsc { display:flex; align-items:center; gap:6px; color:#c7cbd3; font-size:11px; white-space:nowrap; }
+  .role .fsc input[type=color] { width:30px; height:24px; border:1px solid var(--line); border-radius:5px; background:none; padding:0; }
+  .hide { display:none !important; }
   .role i { width:14px; height:14px; border-radius:4px; border:1px solid #0006; display:block; }
   #status { margin-top:8px; color:var(--mute); min-height:18px; font-size:12px; }
   #status.err { color:#ff7a6b; }
@@ -58,7 +62,7 @@
   #view { position:absolute; inset:0; }
   #hud { position:absolute; left:14px; bottom:12px; background:rgba(17,19,23,.85); border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:12px; color:#c7cbd3; pointer-events:none; max-width:min(520px, calc(100% - 28px)); }
   #hud b { color:var(--text); }
-  #tip { position:absolute; right:14px; top:12px; background:rgba(17,19,23,.85); border:1px solid var(--line); border-radius:8px; padding:7px 10px; font-size:12px; color:#c7cbd3; pointer-events:none; }
+  #tip { position:absolute; right:14px; top:50px; background:rgba(17,19,23,.85); border:1px solid var(--line); border-radius:8px; padding:7px 10px; font-size:12px; color:#c7cbd3; pointer-events:none; }
   #busy { position:absolute; inset:0; display:none; align-items:center; justify-content:center; background:rgba(10,11,14,.55); font:600 15px Inter; text-align:center; padding:20px; }
   #busy.on { display:flex; }
   .attr { color:var(--mute); font-size:11px; margin-top:14px; }
@@ -137,6 +141,9 @@
   </details>
 
   <details open><summary>Filaments &amp; tools</summary>
+    <div class="row"><label>Mode</label><select id="tMode"><option value="four">4 colors (fixed)</option><option value="fs">Full Spectrum pack (CMY + W/G)</option></select></div>
+    <div class="row hide" id="tEdRow"><label>Filament pack<small>T1 Cyan · T2 Magenta · T3 Yellow · T4 White / Gray</small></label><select id="tEd"><option value="white">Full Spectrum White Edition</option><option value="gray">Full Spectrum Gray Edition</option></select></div>
+    <div class="hint hide" id="tFsHint">Pick any color per part. It is moved to the nearest mix the pack can make (approximate); every mix gets its own placeholder filament from T5. Set up the mixes in Snapmaker Orca → Color Mixing.</div>
     <div class="pal">
       <label>T1<input type="color" id="col1" value="#f6c21c"></label>
       <label>T2<input type="color" id="col2" value="#a3a6aa"></label>
@@ -158,6 +165,7 @@
 </main>
 </div>
 
+<!--I18N-->
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -175,18 +183,32 @@ const busy = (on, t) => { $('busy').classList.toggle('on', on); if (t) $('busy')
 const nextFrame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
 
 // ---------- roles / tools ----------
-const ROLES = [['house', 'Highlighted (your house)', 1], ['buildings', 'Buildings', 2], ['trees', 'Trees', 2], ['rail', 'Railways', 1], ['roads', 'Roads & paths', 4], ['water', 'Water', 3], ['ground', 'Ground', 2], ['base', 'Base', 4], ['text', 'Label text', 1]];
-for (const [k, label, t] of ROLES) {
+const ROLES = [['house', 'Highlighted (your house)', 1, '#f6c21c'], ['buildings', 'Buildings', 2, '#d9d9d4'], ['trees', 'Trees', 2, '#4f7a3a'], ['rail', 'Railways', 1, '#c0392b'], ['roads', 'Roads & paths', 4, '#55565a'], ['water', 'Water', 3, '#2c8fd6'], ['ground', 'Ground', 2, '#b4ad98'], ['base', 'Base', 4, '#4b4d55'], ['text', 'Label text', 1, '#f6c21c']];
+for (const [k, label, t, c] of ROLES) {
   const d = document.createElement('div'); d.className = 'role';
-  d.innerHTML = `<i id="sw_${k}"></i><span>${label}</span><select id="tool_${k}">${[1, 2, 3, 4].map(i => `<option value="${i}">T${i}</option>`).join('')}</select>`;
+  d.innerHTML = `<i id="sw_${k}"></i><span>${label}</span><select id="tool_${k}">${[1, 2, 3, 4].map(i => `<option value="${i}">T${i}</option>`).join('')}</select>` +
+    `<span class="fsc hide" id="fsc_${k}"><input type="color" id="rc_${k}" value="${c}" title="Wanted color"><span id="rr_${k}"></span></span>`;
   $('roles').appendChild(d); $('tool_' + k).value = t;
 }
-const toolColor = k => $('col' + $('tool_' + k).value).value;
+// per-part color + tool: fixed 4-color palette, or Full Spectrum mixes (T1–T4 pure, mixes from T5)
+let roleInfo = {};
+function refreshRoles() {
+  const fs = $('tMode').value === 'fs', ed = $('tEd').value, ts = FS.toolSet(); roleInfo = {};
+  for (const [k] of ROLES) {
+    if (!fs) { const t = +$('tool_' + k).value; roleInfo[k] = { tool: t, color: $('col' + t).value, recipe: '' }; continue; }
+    const sn = FS.snap($('rc_' + k).value, ed), t = ts(sn);
+    roleInfo[k] = { tool: t, color: sn.hex, recipe: sn.recipe };
+    $('rr_' + k).textContent = `≈ ${sn.recipe} · T${t}`;
+  }
+  for (const [k] of ROLES) { $('tool_' + k).classList.toggle('hide', fs); $('fsc_' + k).classList.toggle('hide', !fs); }
+  document.querySelector('.pal').classList.toggle('hide', fs); $('tEdRow').classList.toggle('hide', !fs); $('tFsHint').classList.toggle('hide', !fs);
+}
+const toolColor = k => (roleInfo[k] || { color: '#888888' }).color;
 
 // ---------- params ----------
 const NUM = ['areaM','printW','printD','bed','pitch','bex','defH','minBld','roofPitch','roofMaxW','treeH','crown','treeScale','grooveDepth','grooveSpacing','vex','smooth','base','floor','roadScale','minRoad','carve','strip','textH','textScale'];
 const BOOL = ['buildings','autoHouse','outbuildings','forest','parkTrees','fields','roads','paths','rails','water','streams','addrLabel'];
-const SAVE = [...NUM, ...BOOL, 'coords','line1','line2','col1','col2','col3','col4', ...ROLES.map(r => 'tool_' + r[0])];
+const SAVE = [...NUM, ...BOOL, 'coords','line1','line2','col1','col2','col3','col4','tMode','tEd', ...ROLES.map(r => 'tool_' + r[0]), ...ROLES.map(r => 'rc_' + r[0])];
 let line2Auto = true;
 try { const s = JSON.parse(localStorage.getItem('townMaker2') || 'null'); if (s) { for (const k of SAVE) if (k in s && $(k)) { const el = $(k); if (el.type === 'checkbox') el.checked = s[k]; else el.value = s[k]; } line2Auto = s.line2Auto !== false; } } catch (e) {}
 function save() { try { const s = { line2Auto }; for (const k of SAVE) { const el = $(k); s[k] = el.type === 'checkbox' ? el.checked : el.value; } localStorage.setItem('townMaker2', JSON.stringify(s)); } catch (e) {} }
@@ -349,6 +371,7 @@ async function rebuildPreview() {
     (state.osm ? `${nB} buildings (${nP} pitched roofs) · ${m.nTrees} trees · ${state.highlight.size} highlighted` : 'Buildings not loaded yet') + (pp > p.pitch ? `<br>Preview at ${pp.toFixed(2)} mm, export at ${p.pitch} mm` : '');
 }
 function updateColors() {
+  refreshRoles();
   for (const [k] of ROLES) { $('sw_' + k).style.background = toolColor(k); if (roleMats[k]) roleMats[k].color.set(toolColor(k)); }
   labelMat.color.set(toolColor('text'));
 }
@@ -420,7 +443,7 @@ const schedule = () => { save(); clearTimeout(pvTimer); pvTimer = setTimeout(() 
 for (const id of [...NUM.filter(k => !['areaM','printW','printD'].includes(k)), 'line1', 'line2', ...BOOL.filter(k => !['autoHouse','addrLabel'].includes(k))]) $(id).addEventListener('input', schedule);
 for (const id of ['autoHouse', 'addrLabel']) $(id).addEventListener('change', save);
 $('clearHi').addEventListener('click', () => { $('autoHouse').checked = false; save(); });
-for (const id of ['col1','col2','col3','col4', ...ROLES.map(r => 'tool_' + r[0])]) $(id).addEventListener('input', () => { save(); updateColors(); });
+for (const id of ['col1','col2','col3','col4','tMode','tEd', ...ROLES.map(r => 'tool_' + r[0]), ...ROLES.map(r => 'rc_' + r[0])]) $(id).addEventListener('input', () => { save(); updateColors(); });
 
 // ---------- export ----------
 function slug() { return ($('line1').value || 'town').normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^\w]+/g, '_').replace(/^_|_$/g, '').toLowerCase() || 'town'; }
@@ -431,7 +454,8 @@ async function buildExport() {
   const m = computeTown(p, state.dem, state.osm, state.highlight, p.pitch);
   const tm = await textMask(p);
   const B = buildTownBodies(p, m, tm);
-  const parts = ROLES.map(([k]) => ({ name: k, body: B[k], tool: +$('tool_' + k).value })).filter(x => x.body && x.body.F && x.body.F.length);
+  refreshRoles();
+  const parts = ROLES.map(([k]) => ({ name: roleInfo[k].recipe ? `${k} [${roleInfo[k].recipe}]` : k, body: B[k], tool: roleInfo[k].tool })).filter(x => x.body && x.body.F && x.body.F.length);
   return { p, parts };
 }
 $('dl3mf').addEventListener('click', async () => {
