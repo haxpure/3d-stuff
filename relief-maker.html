@@ -256,6 +256,8 @@
     <div class="row"><label>Strip depth (mm)<small>0 = no label</small></label><input type="number" id="strip" value="18" min="0" max="40" step="1"></div>
     <div class="row"><label>Text height (mm)</label><input type="number" id="textH" value="0.6" min="0.2" max="3" step="0.2"></div>
     <div class="row"><label>Text size</label><div class="rng"><input type="range" id="textScale" min="0.5" max="1.4" step="0.05" value="1"><output></output></div></div>
+    <div class="row"><label>Font color</label><select id="labelFil"></select></div>
+    <div class="row hide" id="rowLabelColor"><label>Custom font color<small id="labelColorHint"></small></label><input type="color" id="labelColor" value="#ffffff" style="width:100%;height:30px;border:1px solid var(--line);border-radius:6px;background:none;padding:0"></div>
   </details>
 
   <div class="btns"><button id="dl3mf" disabled>Download 3MF</button><button id="dlStl" class="sec" disabled>STLs (zip)</button></div>
@@ -433,6 +435,7 @@ window.FS = (() => {
     "Shifts the wanted colors before they are matched to the pack's mixes.": 'Verschiebt die gewünschten Farben, bevor sie den Mischungen des Sets zugeordnet werden.',
     'Only with the Full Spectrum pack: fixed filaments cannot change their color.': 'Nur mit dem Full-Spectrum-Set: feste Filamente können ihre Farbe nicht ändern.',
     'Real-looking: colors ordered by height like in the satellite image, with mixed transitions. The slicer mixes them.': 'Natürlicher Look: Farben nach Höhe geordnet wie im Satellitenbild, mit gemischten Übergängen. Der Slicer mischt sie.',
+    'Font color': 'Schriftfarbe', 'Automatic': 'Automatisch', 'Custom color': 'Eigene Farbe', 'Custom font color': 'Eigene Schriftfarbe', 'own filament slot in the 3MF': 'eigener Filament-Platz im 3MF',
     // --- Full Spectrum mode ---
     'Full Spectrum pack (CMY + W/G)': 'Full-Spectrum-Set (CMY + W/G)', 'Filament pack': 'Filament-Set', 'T1 Cyan · T2 Magenta · T3 Yellow · T4 White / Gray': 'T1 Cyan · T2 Magenta · T3 Gelb · T4 Weiß / Grau',
     'Full Spectrum White Edition': 'Full Spectrum White Edition', 'Full Spectrum Gray Edition': 'Full Spectrum Gray Edition', 'Your colors (Full Spectrum)': 'Deine Farben (Full Spectrum)',
@@ -1239,7 +1242,7 @@ function filSelect(value, onChange, none) {
 }
 function renderColors() {
   const real = COL.mode !== 'four', fsm = COL.mode === 'fs', sat = imode() === 'real', pal = PAL();
-  renderPresets();
+  renderPresets(); renderLabelColor();
   if (fsm) fsReset();
   $('filTitle').textContent = fsm ? 'Your colors (Full Spectrum)' : real ? 'Your colors' : 'Your 4 filaments';
   $('filHint').textContent = fsm
@@ -1890,6 +1893,10 @@ function colorCfg(p, m) {
     cfg.bands = ex.bands; state.virt = ex.virt;
   }
   if (cfg.mode === 'real') { if (state.img) cfg.cellColors = realCells(p, m); else { cfg.mode = 'contour'; cfg.terrainFil = +A.core; } }
+  if (COL.labelFil === 'custom' && COL.mode !== 'four') {
+    const t = Math.max(0, ...PAL().fils.map(f => f.tool), ...state.virt.map(f => f.tool)) + 1;
+    state.virt.push({ id: LABEL_ID, name: 'Label', color: COL.labelColor || '#ffffff', tool: t });
+  }
   if (COL.mode === 'fs') fsReset();
   return cfg;
 }
@@ -1913,7 +1920,27 @@ function expandBands(bands, steps, T, fils, nextTool) {
   }
   return { bands: out, virt };
 }
-const asgIds = () => { const A = PAL().asg; return { base: +A.base, water: +A.water, trail: +A.trail, poi: +A.poi, text: +A.text }; };
+// label text color: automatic (= contour/text filament), one of your filaments, or a custom color (own placeholder / Full Spectrum mix)
+const LABEL_ID = 8000;
+function labelId() {
+  const v = COL.labelFil ?? 'auto';
+  if (v === 'custom') return COL.mode === 'four' ? +PAL().asg.text : LABEL_ID;
+  if (v !== 'auto' && PAL().fils.some(f => f.id === +v)) return +v;
+  return +PAL().asg.text;
+}
+function renderLabelColor() {
+  const sel = $('labelFil'), four = COL.mode === 'four'; sel.innerHTML = '';
+  sel.add(new Option('Automatic', 'auto'));
+  for (const f of PAL().fils) sel.add(new Option(filLabel(f), f.id));
+  const cu = new Option('Custom color', 'custom'); cu.disabled = four; sel.add(cu);
+  let v = COL.labelFil ?? 'auto'; if (v === 'custom' && four) v = 'auto'; if (v !== 'auto' && v !== 'custom' && !PAL().fils.some(f => f.id === +v)) v = 'auto';
+  sel.value = String(v); $('labelColor').value = COL.labelColor || '#ffffff';
+  $('rowLabelColor').classList.toggle('hide', v !== 'custom');
+  $('labelColorHint').textContent = COL.mode === 'fs' ? (() => { const sn = fsSnap(COL.labelColor || '#ffffff'); return `≈ ${sn.recipe}`; })() : 'own filament slot in the 3MF';
+}
+$('labelFil').addEventListener('change', () => { const v = $('labelFil').value; COL.labelFil = v === 'auto' || v === 'custom' ? v : +v; saveCOL(); renderLabelColor(); schedule(); });
+for (const ev of ['input', 'change']) $('labelColor').addEventListener(ev, () => { COL.labelColor = $('labelColor').value; saveCOL(); renderLabelColor(); schedule(); });
+const asgIds = () => { const A = PAL().asg; return { base: +A.base, water: +A.water, trail: +A.trail, poi: +A.poi, text: labelId() }; };
 
 // ===== simple mode: your filaments in, 4 ready-made looks out =====
 COL.simple ??= { fils: [['Yellow', '#f6c21c'], ['Gray', '#a3a6aa'], ['Light blue', '#5fc3d6'], ['Black', '#17181b']], fs: false, ed: 'white', pick: -1 };
@@ -2105,7 +2132,7 @@ async function rebuildPreview() {
     U.uCellTex.value = ct; U.uUseCell.value = 1;
   } else { U.uCellTex.value = blankTex(); U.uUseCell.value = 0; }
   U.uBlue.value.set(filColor(A.water)); U.uTrail.value.set(filColor(A.trail));
-  baseMat.color.set(filColor(A.base)); labelMat.color.set(filColor(A.text)); poiMat.color.set(filColor(A.poi));
+  baseMat.color.set(filColor(A.base)); labelMat.color.set(filColor(labelId())); poiMat.color.set(filColor(A.poi));
   // POI name labels
   labelsEl.innerHTML = '';
   poiLabels = m.prisms.filter(pr => pr.name).map(pr => { const el = mk('div', { className: 'plabel', textContent: pr.name }); labelsEl.append(el); return { el, v: new THREE.Vector3(pr.X, pr.Y, pr.z1 + 0.5) }; });
@@ -2118,7 +2145,7 @@ async function rebuildPreview() {
   }
   // filaments in use
   const used = new Set(plan.slabs.map(s => s.fil)); if (plan.skin) for (const f of new Set(plan.skin.C)) used.add(f);
-  used.add(+A.base); if (W.some(Boolean)) used.add(+A.water); if (TM.some(Boolean)) used.add(+A.trail); if (m.prisms.length) used.add(+A.poi); if (p.strip > 0) used.add(+A.text);
+  used.add(+A.base); if (W.some(Boolean)) used.add(+A.water); if (TM.some(Boolean)) used.add(+A.trail); if (m.prisms.length) used.add(+A.poi); if (p.strip > 0) used.add(labelId());
   const tools = [...new Set([...used].map(id => (filById(id) || {}).tool))].sort((a, b) => a - b);
   const fits = p.printW <= p.bed && p.printD + p.strip <= p.bed;
   const nT = FEAT.trails.filter(t => t.on).length, nP = m.prisms.length;
