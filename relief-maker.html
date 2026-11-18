@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relief Maker – 4-color terrain 3MF</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+  "fflate": "https://cdn.jsdelivr.net/npm/fflate@0.8.2/esm/browser.js"
+} }
+</script>
+<style>
+  :root { --bg:#111317; --panel:#181b21; --line:#262a33; --text:#e8eaee; --mute:#8b919c; --acc:#f6c21c; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--text); font:13px/1.4 Inter, system-ui, sans-serif; }
+  #app { display:grid; grid-template-columns: 380px 1fr; height:100vh; }
+  aside { background:var(--panel); border-right:1px solid var(--line); overflow-y:auto; padding:14px 16px 40px; }
+  h1 { font:700 18px Poppins, sans-serif; margin:0 0 2px; letter-spacing:.2px; }
+  h1 span { color:var(--acc); }
+  .sub { color:var(--mute); margin-bottom:12px; }
+  #map { height:230px; border-radius:8px; border:1px solid var(--line); margin-bottom:8px; }
+  details { border-top:1px solid var(--line); padding:8px 0; }
+  summary { cursor:pointer; font-weight:600; padding:4px 0; list-style:none; display:flex; justify-content:space-between; }
+  summary::after { content:'+'; color:var(--mute); } details[open] summary::after { content:'–'; }
+  .row { display:grid; grid-template-columns: 1fr 120px; align-items:center; gap:8px; margin:6px 0; }
+  .row.full { grid-template-columns: 1fr; }
+  .row label { color:#c7cbd3; }
+  .row small { color:var(--mute); display:block; font-size:11px; }
+  input[type=text], input[type=number], select { width:100%; background:#0f1115; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:6px 8px; font:inherit; }
+  input[type=range] { width:100%; accent-color: var(--acc); }
+  .rng { display:grid; grid-template-columns: 1fr 52px; gap:6px; align-items:center; }
+  .rng output { text-align:right; color:var(--acc); font-variant-numeric: tabular-nums; }
+  .check { display:flex; gap:8px; align-items:center; margin:5px 0; color:#c7cbd3; }
+  button { background:var(--acc); color:#111; border:0; border-radius:7px; padding:9px 12px; font:600 13px Inter, sans-serif; cursor:pointer; width:100%; }
+  button.sec { background:#2a2f39; color:var(--text); }
+  button:disabled { opacity:.5; cursor:default; }
+  .btns { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; }
+  .fil { display:grid; grid-template-columns: 34px 1fr 70px; gap:8px; align-items:center; margin:5px 0; }
+  .fil input[type=color] { width:34px; height:28px; border:1px solid var(--line); border-radius:6px; background:none; padding:0; }
+  .addr { display:grid; grid-template-columns: 1fr 64px; gap:6px; margin-top:4px; }
+  .addr button { padding:6px 8px; }
+  #addrResults { display:flex; flex-direction:column; gap:3px; margin-top:4px; }
+  #addrResults button { text-align:left; background:#0f1115; color:var(--text); border:1px solid var(--line); font-weight:400; padding:6px 8px; }
+  #addrResults button:hover, #addrResults button.on { border-color:var(--acc); }
+  #addrResults button small { color:var(--mute); display:block; font-size:11px; }
+  #status { margin-top:8px; color:var(--mute); min-height:18px; font-size:12px; }
+  #status.err { color:#ff7a6b; }
+  main { position:relative; }
+  #view { position:absolute; inset:0; }
+  #hud { position:absolute; left:14px; bottom:12px; background:rgba(17,19,23,.82); border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:12px; color:#c7cbd3; pointer-events:none; }
+  #hud b { color:var(--text); }
+  #busy { position:absolute; inset:0; display:none; align-items:center; justify-content:center; background:rgba(10,11,14,.55); font:600 15px Inter; }
+  #busy.on { display:flex; }
+  .attr { color:var(--mute); font-size:11px; margin-top:14px; }
+  .attr a { color:var(--mute); }
+  @media (max-width: 820px) { #app { grid-template-columns: 1fr; grid-template-rows: auto 60vh; height:auto; } aside { border-right:0; } main { height:60vh; } }
+</style>
+</head>
+<body>
+<div id="app">
+<aside>
+  <h1>Relief <span>Maker</span></h1>
+  <div class="sub">Address or coordinates in, 4-color multi-part 3MF out.</div>
+  <div id="map"></div>
+  <div class="row full"><label>Address or place
+    <div class="addr"><input type="text" id="addr" placeholder="e.g. Schöckl, Graz  ·  Hauptplatz 1, 8010 Graz" autocomplete="off"><button id="addrBtn" class="sec">Find</button></div></label>
+    <div id="addrResults"></div>
+    <label class="check"><input type="checkbox" id="addrLabel"> Use the found place as the label name</label></div>
+  <div class="row full"><label>Center (lat, lon) — paste from Google Maps, or click the map
+    <input type="text" id="coords" value="47.115, 15.450"></label></div>
+  <div class="row"><label>Area width<small>km of real terrain across the print</small></label><input type="number" id="areaKm" value="22" min="1" max="200" step="0.5"></div>
+  <button id="fetchBtn">Load terrain</button>
+  <div id="status"></div>
+
+  <details open><summary>Print size</summary>
+    <div class="row"><label>Map width (mm)</label><input type="number" id="printW" value="160" min="40" max="260"></div>
+    <div class="row"><label>Map depth (mm)</label><input type="number" id="printD" value="180" min="40" max="260"></div>
+    <div class="row"><label>Bed size (mm)<small>used to center the model</small></label><input type="number" id="bed" value="270" min="100" max="600"></div>
+    <div class="row"><label>Mesh resolution (mm)<small>smaller = finer, bigger file</small></label><input type="number" id="pitch" value="0.5" min="0.3" max="2" step="0.1"></div>
+  </details>
+
+  <details open><summary>Relief</summary>
+    <div class="row"><label>Vertical exaggeration</label><div class="rng"><input type="range" id="vex" min="1" max="6" step="0.1" value="2.5"><output></output></div></div>
+    <div class="row"><label>Base thickness (mm)</label><input type="number" id="base" value="3" min="1" max="10" step="0.2"></div>
+    <div class="row"><label>Min. terrain above base (mm)</label><input type="number" id="floor" value="1.2" min="0.4" max="10" step="0.2"></div>
+    <div class="row"><label>Smoothing</label><div class="rng"><input type="range" id="smooth" min="0" max="6" step="1" value="1"><output></output></div></div>
+  </details>
+
+  <details open><summary>Contour lines</summary>
+    <div class="row"><label>Interval (m)</label><input type="number" id="interval" value="100" min="10" max="1000" step="10"></div>
+    <div class="row"><label>Lowest contour (m)<small>0 = automatic</small></label><input type="number" id="firstContour" value="0" min="0" step="10"></div>
+    <div class="row"><label>Line thickness (layers)<small>0 = no contour lines</small></label><input type="number" id="sheetLayers" value="2" min="0" max="10" step="1"></div>
+    <div class="row"><label>Layer height (mm)</label><input type="number" id="layer" value="0.2" min="0.08" max="0.32" step="0.02"></div>
+  </details>
+
+  <details open><summary>Water (OpenStreetMap)</summary>
+    <label class="check"><input type="checkbox" id="wRivers" checked> Rivers &amp; canals</label>
+    <label class="check"><input type="checkbox" id="wStreams"> Streams</label>
+    <label class="check"><input type="checkbox" id="wLakes" checked> Lakes &amp; river areas</label>
+    <div class="row"><label>River line width (mm)</label><input type="number" id="riverW" value="1.4" min="0.4" max="5" step="0.1"></div>
+    <div class="row"><label>Carve depth (mm)</label><input type="number" id="carve" value="0.6" min="0.4" max="3" step="0.1"></div>
+  </details>
+
+  <details open><summary>Label strip</summary>
+    <div class="row full"><label>Name<input type="text" id="line1" value="GRAZ · SCHÖCKL"></label></div>
+    <div class="row full"><label>Second line <small>auto-filled with coordinates until you edit it</small><input type="text" id="line2" value=""></label></div>
+    <div class="row"><label>Strip depth (mm)<small>0 = no label</small></label><input type="number" id="strip" value="18" min="0" max="40" step="1"></div>
+    <div class="row"><label>Text height (mm)</label><input type="number" id="textH" value="0.6" min="0.2" max="3" step="0.2"></div>
+    <div class="row"><label>Text size</label><div class="rng"><input type="range" id="textScale" min="0.5" max="1.4" step="0.05" value="1"><output></output></div></div>
+  </details>
+
+  <details open><summary>Filaments &amp; tools</summary>
+    <div class="fil"><input type="color" id="cAccent" value="#f6c21c"><span>Contours + text</span><select id="tAccent"></select></div>
+    <div class="fil"><input type="color" id="cGray" value="#a3a6aa"><span>Terrain</span><select id="tGray"></select></div>
+    <div class="fil"><input type="color" id="cWater" value="#5fc3d6"><span>Water</span><select id="tWater"></select></div>
+    <div class="fil"><input type="color" id="cBase" value="#17181b"><span>Base</span><select id="tBase"></select></div>
+  </details>
+
+  <div class="btns"><button id="dl3mf" disabled>Download 3MF</button><button id="dlStl" class="sec" disabled>STLs (zip)</button></div>
+  <div id="exportInfo" class="sub" style="margin-top:8px"></div>
+  <div class="attr">Elevation: <a href="https://registry.opendata.aws/terrain-tiles/" target="_blank">AWS Terrain Tiles</a> (Mapzen). Water: © <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors. Map tiles: Esri. Print with the layer height above so the contour lines land on whole layers.</div>
+</aside>
+<main>
+  <div id="view"></div>
+  <div id="hud">Load a location to start.</div>
+  <div id="busy">Working…</div>
+</main>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { zipSync } from 'fflate';
+
+// ===== CORE (pure functions, no DOM) =====
+const KM_LAT = 111.2;
+const kmLon = lat => 111.32 * Math.cos(lat * Math.PI / 180);
+
+// Growable typed arrays
+class U32 { constructor(n = 1 << 16) { this.a = new Uint32Array(n); this.n = 0; }
+  push3(x, y, z) { if (this.n + 3 > this.a.length) { const b = new Uint32Array(this.a.length * 2); b.set(this.a); this.a = b; } this.a[this.n++] = x; this.a[this.n++] = y; this.a[this.n++] = z; }
+  get arr() { return this.a.subarray(0, this.n); } }
+
+function geom(p) {
+  const scale = p.printW / p.areaKm;            // mm per km
+  const areaKmY = p.printD / scale;
+  return { scale, areaKmY };
+}
+
+// Build model grid (heights in mm, water mask) from a DEM sampler and a water rasterizer
+function computeModel(p, dem, waterRaster, pitch) {
+  const { scale, areaKmY } = geom(p);
+  const nx = Math.round(p.printW / pitch) + 1, ny = Math.round(p.printD / pitch) + 1;
+  const dx = p.printW / (nx - 1), dy = p.printD / (ny - 1);
+  const xs = new Float32Array(nx), ys = new Float32Array(ny);
+  for (let c = 0; c < nx; c++) xs[c] = c * dx;
+  for (let r = 0; r < ny; r++) ys[r] = r * dy;
+  const N = nx * ny, H = new Float32Array(N);
+  const kl = kmLon(p.lat);
+  for (let r = 0; r < ny; r++) {
+    const lat = p.lat + (ys[r] / scale - areaKmY / 2) / KM_LAT;
+    for (let c = 0; c < nx; c++) {
+      const lon = p.lon + (xs[c] / scale - p.areaKm / 2) / kl;
+      H[r * nx + c] = dem(lat, lon);
+    }
+  }
+  // smoothing: repeated 3x3 box blur
+  let A = H, B = new Float32Array(N);
+  for (let it = 0; it < p.smooth; it++) {
+    for (let r = 0; r < ny; r++) for (let c = 0; c < nx; c++) {
+      let s = 0, k = 0;
+      for (let j = -1; j <= 1; j++) { const rr = r + j; if (rr < 0 || rr >= ny) continue;
+        for (let i = -1; i <= 1; i++) { const cc = c + i; if (cc < 0 || cc >= nx) continue; s += A[rr * nx + cc]; k++; } }
+      B[r * nx + c] = s / k;
+    }
+    const t = A; A = B; B = t === H ? new Float32Array(N) : t;
+  }
+  const Hs = A;
+  let hmin = Infinity, hmax = -Infinity;
+  for (let i = 0; i < N; i++) { if (Hs[i] < hmin) hmin = Hs[i]; if (Hs[i] > hmax) hmax = Hs[i]; }
+  const VS = scale / 1000 * p.vex;              // mm per m
+  const z0 = p.base + p.floor;
+  const zof = e => z0 + (e - hmin) * VS;
+  const W = waterRaster ? waterRaster(nx, ny, pitch) : new Uint8Array(N);
+  const Zc = new Float32Array(N), TR = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    const z = zof(Hs[i]);
+    Zc[i] = z - (W[i] ? p.carve : 0);
+    TR[i] = W[i] ? Math.max(p.carve - p.recess, 0.2) : 0;
+  }
+  // contour sheets aligned to layer grid
+  const sheets = [];
+  const interval = p.interval;
+  let first = p.firstContour > 0 ? p.firstContour : Math.ceil((hmin + interval * 0.6) / interval) * interval;
+  const thick = p.sheetLayers * p.layer;
+  if (interval > 0 && p.sheetLayers > 0)
+    for (let e = first; e <= hmax; e += interval) {
+      const z = Math.round(zof(e) / p.layer) * p.layer;
+      if (z <= p.base + 1e-6) continue;
+      sheets.push([z, z + thick, e]);
+    }
+  let zmax = 0; for (let i = 0; i < N; i++) zmax = Math.max(zmax, Zc[i] + TR[i]);
+  return { nx, ny, xs, ys, Zc, TR, W, hmin, hmax, sheets, zmax, scale, areaKmY };
+}
+
+// Closed shell between two heightfields L<=U; zero-thickness vertices merged
+function hfBody(L, U, nx, ny, xs, ys) {
+  const N = nx * ny, act = new Uint8Array(N); let any = false;
+  for (let i = 0; i < N; i++) if (U[i] - L[i] > 1e-6) { act[i] = 1; any = true; }
+  if (!any) return null;
+  const bot = i => act[i] ? N + i : i;
+  const T = new U32();
+  for (let r = 0; r < ny - 1; r++) for (let c = 0; c < nx - 1; c++) {
+    const a = r * nx + c, b = a + 1, cc = a + nx + 1, d = a + nx;
+    if (act[a] | act[b] | act[cc]) { T.push3(a, b, cc); T.push3(bot(cc), bot(b), bot(a)); }
+    if (act[a] | act[cc] | act[d]) { T.push3(a, cc, d); T.push3(bot(d), bot(cc), bot(a)); }
+  }
+  const per = [];
+  for (let c = 0; c < nx; c++) per.push(c);
+  for (let r = 1; r < ny; r++) per.push(r * nx + nx - 1);
+  for (let c = nx - 2; c >= 0; c--) per.push((ny - 1) * nx + c);
+  for (let r = ny - 2; r >= 1; r--) per.push(r * nx);
+  for (let k = 0; k < per.length; k++) {
+    const p1 = per[k], p2 = per[(k + 1) % per.length];
+    if (!(act[p1] | act[p2])) continue;
+    const b1 = bot(p1), b2 = bot(p2);
+    if (b1 !== p1) T.push3(p2, p1, b1);
+    if (b2 !== p2) T.push3(p2, b1, b2);
+  }
+  const vz = i => i < N ? U[i] : L[i - N];
+  return compact(T.arr, i => { const j = i < N ? i : i - N; return [xs[j % nx], ys[(j / nx) | 0], vz(i)]; }, 2 * N);
+}
+
+function compact(F, pos, nv) {
+  const map = new Int32Array(nv).fill(-1); let n = 0;
+  const Fo = new Uint32Array(F.length);
+  for (let k = 0; k < F.length; k++) { let m = map[F[k]]; if (m < 0) { m = map[F[k]] = n++; } Fo[k] = m; }
+  const V = new Float32Array(n * 3);
+  for (let i = 0; i < nv; i++) { const m = map[i]; if (m >= 0) { const q = pos(i); V[m * 3] = q[0]; V[m * 3 + 1] = q[1]; V[m * 3 + 2] = q[2]; } }
+  return { V, F: Fo };
+}
+
+function boxBody(x0, x1, y0, y1, z0, z1) {
+  const V = new Float32Array([x0,y0,z0, x1,y0,z0, x1,y1,z0, x0,y1,z0, x0,y0,z1, x1,y0,z1, x1,y1,z1, x0,y1,z1]);
+  const F = new Uint32Array([0,2,1, 0,3,2, 4,5,6, 4,6,7, 0,1,5, 0,5,4, 1,2,6, 1,6,5, 2,3,7, 2,7,6, 3,0,4, 3,4,7]);
+  return { V, F };
+}
+
+// Ink mask M (Uint8Array ww*hh, row 0 = south) -> extruded pixel solid
+function pixelBody(M, ww, hh, px, x0, y0, z0, z1) {
+  const GW = ww + 1, No = GW * (hh + 1);
+  const ink = (r, c) => r >= 0 && r < hh && c >= 0 && c < ww && M[r * ww + c];
+  const T = new U32();
+  for (let r = 0; r < hh; r++) for (let c = 0; c < ww; c++) {
+    if (!M[r * ww + c]) continue;
+    const a = r * GW + c, b = a + 1, cc = a + GW + 1, d = a + GW;
+    T.push3(a, b, cc); T.push3(a, cc, d); T.push3(a + No, cc + No, b + No); T.push3(a + No, d + No, cc + No);
+    const edges = [[!ink(r - 1, c), a, b], [!ink(r, c + 1), b, cc], [!ink(r + 1, c), cc, d], [!ink(r, c - 1), d, a]];
+    for (const [e, p, q] of edges) if (e) { T.push3(p, p + No, q); T.push3(q, p + No, q + No); }
+  }
+  if (!T.n) return null;
+  return compact(T.arr, i => { const top = i < No; const j = top ? i : i - No; return [x0 + (j % GW) * px, y0 + ((j / GW) | 0) * px, top ? z1 : z0]; }, 2 * No);
+}
+
+function mergeBodies(list) {
+  list = list.filter(Boolean);
+  let nv = 0, nf = 0; for (const b of list) { nv += b.V.length; nf += b.F.length; }
+  const V = new Float32Array(nv), F = new Uint32Array(nf); let ov = 0, of = 0;
+  for (const b of list) { V.set(b.V, ov); for (let k = 0; k < b.F.length; k++) F[of + k] = b.F[k] + ov / 3; ov += b.V.length; of += b.F.length; }
+  return { V, F };
+}
+
+// Build the 4 printable bodies
+function buildBodies(p, m, textMask) {
+  const { nx, ny, xs, ys, Zc, TR, sheets } = m;
+  const N = nx * ny;
+  const levels = [p.base]; for (const s of sheets) levels.push(s[0], s[1]); levels.push(1e9);
+  const gray = [], yellow = [];
+  const L = new Float32Array(N), U = new Float32Array(N);
+  for (let k = 0; k < levels.length - 1; k++) {
+    const a = levels[k], b = levels[k + 1];
+    for (let i = 0; i < N; i++) { L[i] = Math.min(a, Zc[i]); U[i] = Math.min(b, Zc[i]); }
+    const body = hfBody(L, U, nx, ny, xs, ys);
+    if (body) (k % 2 ? yellow : gray).push(body);
+  }
+  const Ut = new Float32Array(N); for (let i = 0; i < N; i++) Ut[i] = Zc[i] + TR[i];
+  const water = hfBody(Zc, Ut, nx, ny, xs, ys);
+  const base = boxBody(0, p.printW, -p.strip, p.printD, 0, p.base);
+  const text = textMask ? pixelBody(textMask.M, textMask.w, textMask.h, textMask.px, 0, -p.strip, p.base, p.base + p.textH) : null;
+  return { base, gray: mergeBodies(gray), accent: mergeBodies([...yellow, text]), water: water };
+}
+
+function checkBody(b) {
+  const m = new Map(); const F = b.F;
+  for (let k = 0; k < F.length; k += 3) for (let e = 0; e < 3; e++) {
+    const u = F[k + e], v = F[k + (e + 1) % 3]; const key = u < v ? u * 4294967296 + v : v * 4294967296 + u;
+    m.set(key, (m.get(key) || 0) + 1);
+  }
+  let open = 0, nm = 0; for (const c of m.values()) { if (c === 1) open++; else if (c > 2) nm++; }
+  let vol = 0; const V = b.V;
+  for (let k = 0; k < F.length; k += 3) {
+    const a = F[k] * 3, bb = F[k + 1] * 3, c = F[k + 2] * 3;
+    vol += (V[a] * (V[bb + 1] * V[c + 2] - V[bb + 2] * V[c + 1]) - V[a + 1] * (V[bb] * V[c + 2] - V[bb + 2] * V[c]) + V[a + 2] * (V[bb] * V[c + 1] - V[bb + 1] * V[c])) / 6;
+  }
+  return { tris: F.length / 3, open, nm, vol };
+}
+
+// ---- writers ----
+const enc = new TextEncoder();
+function chunked(parts, n, fn, step = 20000) {
+  for (let i = 0; i < n; i += step) { let s = ''; const e = Math.min(n, i + step); for (let k = i; k < e; k++) s += fn(k); parts.push(enc.encode(s)); }
+}
+function concatU8(parts) { let n = 0; for (const p of parts) n += p.length; const o = new Uint8Array(n); let k = 0; for (const p of parts) { o.set(p, k); k += p.length; } return o; }
+const uuid = () => 'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/x/g, () => (Math.random() * 16 | 0).toString(16));
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+
+function build3MF(parts, p, title) {   // parts: [{name, body, tool}]
+  const NS = 'xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:BambuStudio="http://schemas.bambulab.com/package/2021" xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06" requiredextensions="p"';
+  const obj = [enc.encode(`<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" xml:lang="en-US" ${NS}>\n<metadata name="BambuStudio:3mfVersion">1</metadata>\n<resources>\n`)];
+  parts.forEach((pt, i) => {
+    const { V, F } = pt.body;
+    obj.push(enc.encode(`<object id="${i + 1}" p:UUID="${uuid()}" type="model"><mesh><vertices>\n`));
+    chunked(obj, V.length / 3, k => `<vertex x="${V[k * 3].toFixed(3)}" y="${V[k * 3 + 1].toFixed(3)}" z="${V[k * 3 + 2].toFixed(3)}"/>`);
+    obj.push(enc.encode('</vertices><triangles>\n'));
+    chunked(obj, F.length / 3, k => `<triangle v1="${F[k * 3]}" v2="${F[k * 3 + 1]}" v3="${F[k * 3 + 2]}"/>`);
+    obj.push(enc.encode('</triangles></mesh></object>\n'));
+  });
+  obj.push(enc.encode('</resources>\n<build/>\n</model>\n'));
+  const gid = parts.length + 1, I = '1 0 0 0 1 0 0 0 1 0 0 0';
+  const tx = (p.bed / 2 - p.printW / 2).toFixed(3), ty = (p.bed / 2 - (p.printD - p.strip) / 2).toFixed(3);
+  let main = `<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" xml:lang="en-US" ${NS}>\n<metadata name="Application">BambuStudio-01.10.02.76</metadata>\n<metadata name="BambuStudio:3mfVersion">1</metadata>\n<metadata name="Title">${esc(title)}</metadata>\n<resources>\n<object id="${gid}" p:UUID="${uuid()}" type="model"><components>\n`;
+  parts.forEach((pt, i) => { main += `<component p:path="/3D/Objects/object_1.model" objectid="${i + 1}" p:UUID="${uuid()}" transform="${I}"/>\n`; });
+  main += `</components></object>\n</resources>\n<build p:UUID="${uuid()}"><item objectid="${gid}" p:UUID="${uuid()}" transform="1 0 0 0 1 0 0 0 1 ${tx} ${ty} 0" printable="1"/></build>\n</model>\n`;
+  let cfg = `<?xml version="1.0" encoding="UTF-8"?>\n<config>\n  <object id="${gid}">\n    <metadata key="name" value="${esc(title)}"/>\n    <metadata key="extruder" value="${parts[1] ? parts[1].tool : 1}"/>\n`;
+  parts.forEach((pt, i) => { cfg += `    <part id="${i + 1}" subtype="normal_part">\n      <metadata key="name" value="${esc(pt.name)}"/>\n      <metadata key="matrix" value="1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"/>\n      <metadata key="extruder" value="${pt.tool}"/>\n    </part>\n`; });
+  cfg += `  </object>\n  <plate>\n    <metadata key="plater_id" value="1"/>\n    <metadata key="plater_name" value=""/>\n    <metadata key="locked" value="false"/>\n    <model_instance>\n      <metadata key="object_id" value="${gid}"/>\n      <metadata key="instance_id" value="0"/>\n      <metadata key="identify_id" value="1"/>\n    </model_instance>\n  </plate>\n  <assemble>\n   <assemble_item object_id="${gid}" instance_id="0" transform="1 0 0 0 1 0 0 0 1 ${tx} ${ty} 0" offset="0 0 0" />\n  </assemble>\n</config>\n`;
+  return {
+    '[Content_Types].xml': enc.encode('<?xml version="1.0" encoding="UTF-8"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/><Default Extension="png" ContentType="image/png"/></Types>'),
+    '_rels/.rels': enc.encode('<?xml version="1.0" encoding="UTF-8"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel-1" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>'),
+    '3D/_rels/3dmodel.model.rels': enc.encode('<?xml version="1.0" encoding="UTF-8"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/Objects/object_1.model" Id="rel-1" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>'),
+    '3D/3dmodel.model': enc.encode(main),
+    '3D/Objects/object_1.model': concatU8(obj),
+    'Metadata/model_settings.config': enc.encode(cfg),
+  };
+}
+
+function buildSTL(body, name) {
+  const { V, F } = body, n = F.length / 3;
+  const buf = new ArrayBuffer(84 + 50 * n), dv = new DataView(buf);
+  const hdr = enc.encode(('relief ' + name).slice(0, 79)); new Uint8Array(buf, 0, hdr.length).set(hdr);
+  dv.setUint32(80, n, true);
+  let o = 84;
+  for (let k = 0; k < n; k++) {
+    const a = F[k * 3] * 3, b = F[k * 3 + 1] * 3, c = F[k * 3 + 2] * 3;
+    const ux = V[b] - V[a], uy = V[b + 1] - V[a + 1], uz = V[b + 2] - V[a + 2];
+    const wx = V[c] - V[a], wy = V[c + 1] - V[a + 1], wz = V[c + 2] - V[a + 2];
+    let nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nz = ux * wy - uy * wx; const l = Math.hypot(nx, ny, nz) || 1;
+    dv.setFloat32(o, nx / l, true); dv.setFloat32(o + 4, ny / l, true); dv.setFloat32(o + 8, nz / l, true); o += 12;
+    for (const q of [a, b, c]) { dv.setFloat32(o, V[q], true); dv.setFloat32(o + 4, V[q + 1], true); dv.setFloat32(o + 8, V[q + 2], true); o += 12; }
+    o += 2;
+  }
+  return new Uint8Array(buf);
+}
+// ===== END CORE =====
+
+
+const $ = id => document.getElementById(id);
+const statusEl = $('status');
+const setStatus = (t, err) => { statusEl.textContent = t; statusEl.className = err ? 'err' : ''; if ($('busy').classList.contains('on') && !err) $('busy').textContent = t; };
+const busy = (on, t) => { $('busy').classList.toggle('on', on); if (t) $('busy').textContent = t; };
+const nextFrame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+
+for (const id of ['tAccent', 'tGray', 'tWater', 'tBase']) for (let i = 1; i <= 8; i++) $(id).add(new Option('T' + i, i));
+$('tAccent').value = 1; $('tGray').value = 2; $('tWater').value = 3; $('tBase').value = 4;
+
+// ---------- params ----------
+const NUM = ['areaKm','printW','printD','bed','pitch','vex','base','floor','smooth','interval','firstContour','sheetLayers','layer','riverW','carve','strip','textH','textScale'];
+const SAVE = [...NUM, 'addrLabel', 'coords','line1','line2','wRivers','wStreams','wLakes','cAccent','cGray','cWater','cBase','tAccent','tGray','tWater','tBase'];
+let line2Auto = true;
+try { const s = JSON.parse(localStorage.getItem('reliefMaker') || 'null'); if (s) { for (const k of SAVE) if (k in s && $(k)) { const el = $(k); if (el.type === 'checkbox') el.checked = s[k]; else el.value = s[k]; } line2Auto = s.line2Auto !== false; } } catch (e) {}
+function save() { try { const s = { line2Auto }; for (const k of SAVE) { const el = $(k); s[k] = el.type === 'checkbox' ? el.checked : el.value; } localStorage.setItem('reliefMaker', JSON.stringify(s)); } catch (e) {} }
+
+function parseCoords(str) {
+  const dms = [...str.matchAll(/(\d+(?:\.\d+)?)\s*°\s*(?:(\d+(?:\.\d+)?)\s*['′]\s*)?(?:(\d+(?:\.\d+)?)\s*["″]\s*)?([NSEWnsew])/g)];
+  if (dms.length >= 2) {
+    let lat, lon;
+    for (const m of dms) { let v = +m[1] + (+m[2] || 0) / 60 + (+m[3] || 0) / 3600; const h = m[4].toUpperCase(); if (h === 'S' || h === 'W') v = -v; if (h === 'N' || h === 'S') lat = v; else lon = v; }
+    if (lat != null && lon != null) return [lat, lon];
+  }
+  const n = str.match(/-?\d+(?:\.\d+)?/g);
+  if (n && n.length >= 2) { const lat = +n[0], lon = +n[1]; if (Math.abs(lat) <= 85 && Math.abs(lon) <= 180) return [lat, lon]; }
+  return null;
+}
+const dm = (v, pos, neg) => { const a = Math.abs(v), d = Math.floor(a), m = Math.round((a - d) * 60); return `${m === 60 ? d + 1 : d}°${String(m === 60 ? 0 : m).padStart(2, '0')}'${v >= 0 ? pos : neg}`; };
+
+function params() {
+  const p = {}; for (const k of NUM) p[k] = parseFloat($(k).value) || 0;
+  const c = parseCoords($('coords').value) || [47.115, 15.45]; p.lat = c[0]; p.lon = c[1];
+  p.recess = 0.2; p.pitch = Math.max(0.3, p.pitch); p.layer = Math.max(0.05, p.layer); p.areaKm = Math.max(0.5, p.areaKm);
+  if (p.strip > 0 && p.strip < 6) p.strip = 6;
+  return p;
+}
+function updateLine2() { if (!line2Auto) return; const p = params(); $('line2').value = `${dm(p.lat, 'N', 'S')}   ${dm(p.lon, 'E', 'W')}`; }
+$('line2').addEventListener('input', () => { line2Auto = $('line2').value.trim() === ''; save(); });
+if (line2Auto || !$('line2').value) { line2Auto = true; updateLine2(); }
+
+for (const el of document.querySelectorAll('.rng')) {
+  const r = el.querySelector('input'), o = el.querySelector('output');
+  const f = () => o.textContent = (+r.value).toFixed(r.step < 1 ? (r.step < 0.1 ? 2 : 1) : 0) + (r.id === 'vex' ? '×' : '');
+  r.addEventListener('input', f); f();
+}
+
+// ---------- map ----------
+const map = L.map('map', { zoomControl: true, attributionControl: false });
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 17 }).addTo(map);
+const rect = L.rectangle([[0, 0], [0, 0]], { color: '#f6c21c', weight: 2, fillOpacity: 0.08 }).addTo(map);
+const marker = L.circleMarker([0, 0], { radius: 4, color: '#f6c21c' }).addTo(map);
+function areaBounds(p) { const { areaKmY } = geom(p); const dLat = areaKmY / 2 / KM_LAT, dLon = p.areaKm / 2 / kmLon(p.lat); return [[p.lat - dLat, p.lon - dLon], [p.lat + dLat, p.lon + dLon]]; }
+function updateMap(fit) { const p = params(); const b = areaBounds(p); rect.setBounds(b); marker.setLatLng([p.lat, p.lon]); if (fit) map.fitBounds(b, { padding: [10, 10] }); }
+updateMap(true);
+map.on('click', e => { $('coords').value = `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`; onLocationChange(); });
+
+// ---------- address search (geocoding) ----------
+async function geocode(q) {
+  const out = [];
+  try {   // Photon (komoot, OSM data)
+    const r = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=6&lang=de`);
+    if (!r.ok) throw new Error('Photon HTTP ' + r.status);
+    const j = await r.json();
+    for (const f of j.features || []) {
+      const pr = f.properties || {}, [lon, lat] = f.geometry.coordinates;
+      const name = pr.name || [pr.street, pr.housenumber].filter(Boolean).join(' ') || pr.city || q;
+      const street = pr.name && pr.street ? [pr.street, pr.housenumber].filter(Boolean).join(' ') : '';
+      const detail = [street, [pr.postcode, pr.city || pr.town || pr.village].filter(Boolean).join(' '), pr.state, pr.country].filter(Boolean).join(', ');
+      out.push({ lat, lon, name, detail, short: pr.name || pr.city || pr.town || pr.village || name, hn: pr.housenumber || '' });
+    }
+  } catch (e) { console.warn(e); }
+  if (out.length) return out;
+  // fallback: Nominatim
+  const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&accept-language=de&q=${encodeURIComponent(q)}`);
+  if (!r.ok) throw new Error('Address lookup failed (HTTP ' + r.status + ')');
+  for (const x of await r.json()) {
+    const parts = x.display_name.split(', ');
+    out.push({ lat: +x.lat, lon: +x.lon, name: x.name || parts[0], detail: parts.slice(1).join(', '), short: x.name || parts[0], hn: (x.address && x.address.house_number) || '' });
+  }
+  return out;
+}
+function applyPlace(pl, btn) {
+  $('coords').value = `${pl.lat.toFixed(5)}, ${pl.lon.toFixed(5)}`;
+  if ($('addrLabel').checked) $('line1').value = pl.short.toUpperCase();
+  for (const b of $('addrResults').children) b.classList.toggle('on', b === btn);
+  onLocationChange();
+}
+async function addrSearch() {
+  const q = $('addr').value.trim(); if (!q) return;
+  const ll = parseCoords(q);
+  if (ll && /^[\s\d.,°'′"″NSEWnsew+-]+$/.test(q)) { $('coords').value = `${ll[0].toFixed(5)}, ${ll[1].toFixed(5)}`; $('addrResults').innerHTML = ''; onLocationChange(); return; }
+  $('addrBtn').disabled = true; setStatus('Looking up address…');
+  try {
+    const res = await geocode(q);
+    $('addrResults').innerHTML = '';
+    if (!res.length) { setStatus(`Nothing found for "${q}".`, true); return; }
+    res.forEach((pl, i) => {
+      const b = document.createElement('button'); b.type = 'button';
+      b.innerHTML = `${esc(pl.name)}<small>${esc(pl.detail)} · ${pl.lat.toFixed(4)}, ${pl.lon.toFixed(4)}</small>`;
+      b.onclick = () => applyPlace(pl, b); $('addrResults').appendChild(b);
+    });
+    applyPlace(res[0], $('addrResults').firstChild);
+    setStatus(res.length > 1 ? `Found ${res.length} matches — using the first, click another to switch.` : 'Address found.');
+  } catch (e) { console.error(e); setStatus(e.message + ' — check your internet connection.', true); }
+  finally { $('addrBtn').disabled = false; }
+}
+$('addrBtn').addEventListener('click', addrSearch);
+$('addr').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addrSearch(); } });
+$('addrLabel').addEventListener('change', save);
+
+// ---------- data ----------
+const tileCache = new Map();
+function loadTile(z, x, y) {
+  const key = `${z}/${x}/${y}`;
+  const hosts = ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/', 'https://elevation-tiles-prod.s3.amazonaws.com/terrarium/'];
+  const one = url => new Promise((res, rej) => {
+    const img = new Image(); img.crossOrigin = 'anonymous';
+    const t = setTimeout(() => { img.src = ''; rej(new Error('timeout')); }, 20000);
+    img.onload = () => { clearTimeout(t); res(img); }; img.onerror = () => { clearTimeout(t); rej(new Error('blocked or missing')); };
+    img.src = url + key + '.png';
+  });
+  if (!tileCache.has(key)) tileCache.set(key, one(hosts[0]).catch(() => one(hosts[1])).catch(err => { tileCache.delete(key); throw new Error(`Elevation tile ${key} failed (${err.message})`); }));
+  return tileCache.get(key);
+}
+const lon2px = (lon, z) => (lon + 180) / 360 * 256 * 2 ** z;
+const lat2px = (lat, z) => { const r = lat * Math.PI / 180; return (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * 256 * 2 ** z; };
+
+async function loadDEM(p) {
+  const [[s, w], [n, e]] = areaBounds(p);
+  const groundPitch = p.pitch / geom(p).scale * 1000;                 // m per mesh cell
+  let z = 14;
+  const res = z => 156543.03 * Math.cos(p.lat * Math.PI / 180) / 2 ** z;
+  while (z > 5 && res(z) < groundPitch / 2) z--;
+  let tx0, tx1, ty0, ty1;
+  for (;;) {
+    tx0 = Math.floor(lon2px(w, z) / 256); tx1 = Math.floor(lon2px(e, z) / 256);
+    ty0 = Math.floor(lat2px(n, z) / 256); ty1 = Math.floor(lat2px(s, z) / 256);
+    if ((tx1 - tx0 + 1) * (ty1 - ty0 + 1) <= 144 || z <= 5) break; z--;
+  }
+  const cw = (tx1 - tx0 + 1) * 256, ch = (ty1 - ty0 + 1) * 256;
+  const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+  const ctx = cv.getContext('2d', { willReadFrequently: true });
+  const jobs = [];
+  for (let x = tx0; x <= tx1; x++) for (let y = ty0; y <= ty1; y++) jobs.push(loadTile(z, x, y).then(img => ctx.drawImage(img, (x - tx0) * 256, (y - ty0) * 256)));
+  let done = 0; jobs.forEach(j => j.then(() => setStatus(`Elevation tiles ${++done}/${jobs.length} (zoom ${z})…`)));
+  await Promise.all(jobs);
+  const d = ctx.getImageData(0, 0, cw, ch).data, Hm = new Float32Array(cw * ch);
+  for (let i = 0; i < cw * ch; i++) Hm[i] = d[i * 4] * 256 + d[i * 4 + 1] + d[i * 4 + 2] / 256 - 32768;
+  const ox = tx0 * 256, oy = ty0 * 256;
+  return (lat, lon) => {
+    let fx = lon2px(lon, z) - ox - 0.5, fy = lat2px(lat, z) - oy - 0.5;
+    fx = Math.min(Math.max(fx, 0), cw - 1.001); fy = Math.min(Math.max(fy, 0), ch - 1.001);
+    const x0 = fx | 0, y0 = fy | 0, ax = fx - x0, ay = fy - y0, i = y0 * cw + x0;
+    return (Hm[i] * (1 - ax) + Hm[i + 1] * ax) * (1 - ay) + (Hm[i + cw] * (1 - ax) + Hm[i + cw + 1] * ax) * ay;
+  };
+}
+
+const waterCache = new Map();
+async function loadWater(p) {
+  const [[s, w], [n, e]] = areaBounds(p);
+  const pad = 0.01, bb = [s - pad, w - pad, n + pad, e + pad].map(v => v.toFixed(4)).join(',');
+  if (waterCache.has(bb)) return waterCache.get(bb);
+  const q = `[out:json][timeout:60];(way["waterway"~"^(river|canal|stream)$"](${bb});way["natural"="water"](${bb});relation["natural"="water"](${bb}););out geom;`;
+  let lastErr;
+  for (const url of ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter']) {
+    try {
+      const ac = new AbortController(), to = setTimeout(() => ac.abort(), 30000);
+      const r = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: ac.signal }).finally(() => clearTimeout(to));
+      if (!r.ok) throw new Error('Overpass HTTP ' + r.status);
+      const j = await r.json();
+      const lines = [], polys = [];
+      for (const el of j.elements) {
+        const t = el.tags || {};
+        if (el.type === 'way' && t.waterway) { if (t.tunnel && t.tunnel !== 'no') continue; if (el.geometry) lines.push({ kind: t.waterway === 'stream' ? 'stream' : 'river', pts: el.geometry }); }
+        else if (el.type === 'way' && el.geometry) polys.push([el.geometry]);
+        else if (el.type === 'relation' && el.members) polys.push(el.members.filter(m => m.geometry).map(m => m.geometry));
+      }
+      const out = { lines, polys }; waterCache.set(bb, out); return out;
+    } catch (err) { lastErr = err; }
+  }
+  throw lastErr;
+}
+
+function makeWaterRaster(p, water) {
+  if (!water) return null;
+  return (nx, ny, pitch) => {
+    const { scale, areaKmY } = geom(p), kl = kmLon(p.lat);
+    const cv = document.createElement('canvas'); cv.width = nx; cv.height = ny;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    const dx = p.printW / (nx - 1), dy = p.printD / (ny - 1);
+    const X = pt => (((pt.lon - p.lon) * kl + p.areaKm / 2) * scale) / dx;
+    const Y = pt => (ny - 1) - (((pt.lat - p.lat) * KM_LAT + areaKmY / 2) * scale) / dy;
+    ctx.fillStyle = ctx.strokeStyle = '#fff'; ctx.lineCap = ctx.lineJoin = 'round';
+    if ($('wLakes').checked) for (const rings of water.polys) {
+      ctx.beginPath();
+      for (const ring of rings) ring.forEach((pt, i) => i ? ctx.lineTo(X(pt), Y(pt)) : ctx.moveTo(X(pt), Y(pt)));
+      ctx.fill('evenodd');
+    }
+    for (const ln of water.lines) {
+      if (ln.kind === 'river' && !$('wRivers').checked) continue;
+      if (ln.kind === 'stream' && !$('wStreams').checked) continue;
+      ctx.lineWidth = Math.max(1, (ln.kind === 'stream' ? p.riverW * 0.55 : p.riverW) / dx);
+      ctx.beginPath(); ln.pts.forEach((pt, i) => i ? ctx.lineTo(X(pt), Y(pt)) : ctx.moveTo(X(pt), Y(pt))); ctx.stroke();
+    }
+    const d = ctx.getImageData(0, 0, nx, ny).data, M = new Uint8Array(nx * ny);
+    for (let r = 0; r < ny; r++) for (let c = 0; c < nx; c++) M[r * nx + c] = d[((ny - 1 - r) * nx + c) * 4 + 3] > 110 ? 1 : 0;
+    return M;
+  };
+}
+
+// ---------- label ----------
+async function textCanvas(p, color) {
+  const px = 0.1, w = Math.round(p.printW / px), h = Math.round(p.strip / px);
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  if (!h) return { cv, w, h, px };
+  try { await Promise.race([document.fonts.load('700 100px Poppins'), new Promise(r => setTimeout(r, 3000))]); } catch (e) {}
+  const ctx = cv.getContext('2d'); ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const lines = [[$('line1').value.trim(), 0.36, 0.50], [$('line2').value.trim(), 0.77, 0.24]];
+  for (const [t, cy, size] of lines) {
+    if (!t) continue;
+    let fs = h * size * p.textScale; ctx.font = `700 ${fs}px Poppins, Arial, sans-serif`;
+    const mw = ctx.measureText(t).width; if (mw > w * 0.94) { fs *= w * 0.94 / mw; ctx.font = `700 ${fs}px Poppins, Arial, sans-serif`; }
+    const y = (!$('line2').value.trim() && cy < 0.5) ? 0.5 : (!$('line1').value.trim() ? 0.5 : cy);
+    ctx.fillText(t, w / 2, y * h);
+  }
+  return { cv, w, h, px };
+}
+async function textMask(p) {
+  if (p.strip <= 0) return null;
+  const { cv, w, h, px } = await textCanvas(p, '#fff');
+  const d = cv.getContext('2d').getImageData(0, 0, w, h).data, M = new Uint8Array(w * h);
+  for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) M[r * w + c] = d[((h - 1 - r) * w + c) * 4 + 3] > 127 ? 1 : 0;
+  return { M, w, h, px };
+}
+
+// ---------- 3D preview ----------
+const view = $('view');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); view.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x111317);
+const camera = new THREE.PerspectiveCamera(40, 1, 1, 5000); camera.up.set(0, 0, 1);
+const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true;
+scene.add(new THREE.HemisphereLight(0xffffff, 0x404048, 1.1));
+const sun = new THREE.DirectionalLight(0xffffff, 2.2); sun.position.set(-200, 250, 300); scene.add(sun);
+const fill = new THREE.DirectionalLight(0xffffff, 0.5); fill.position.set(250, -200, 120); scene.add(fill);
+const group = new THREE.Group(); scene.add(group);
+const bedLine = new THREE.LineLoop(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x3a3f4a })); scene.add(bedLine);
+
+const U = { uSheets: { value: Array.from({ length: 64 }, () => new THREE.Vector2(-1, -1)) }, uN: { value: 0 },
+  uGray: { value: new THREE.Color() }, uYel: { value: new THREE.Color() }, uBlue: { value: new THREE.Color() } };
+const terrainMat = new THREE.MeshStandardMaterial({ roughness: 0.85, metalness: 0, side: THREE.DoubleSide });
+terrainMat.onBeforeCompile = sh => {
+  Object.assign(sh.uniforms, U);
+  sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float water;\nvarying float vZ;\nvarying float vWater;')
+    .replace('#include <begin_vertex>', '#include <begin_vertex>\nvZ = position.z;\nvWater = water;');
+  sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec2 uSheets[64];\nuniform int uN;\nuniform vec3 uGray;\nuniform vec3 uYel;\nuniform vec3 uBlue;\nvarying float vZ;\nvarying float vWater;')
+    .replace('#include <color_fragment>', '#include <color_fragment>\n{ vec3 col = uGray; for (int i = 0; i < 64; i++) { if (i >= uN) break; if (vZ >= uSheets[i].x && vZ < uSheets[i].y) col = uYel; } if (vWater > 0.5) col = uBlue; diffuseColor.rgb = col; }');
+};
+const baseMat = new THREE.MeshStandardMaterial({ roughness: 0.7 });
+let labelTex = null;
+const labelMat = new THREE.MeshStandardMaterial({ transparent: true, alphaTest: 0.5, roughness: 0.8 });
+
+function resize() { const r = view.getBoundingClientRect(); renderer.setSize(r.width, r.height); camera.aspect = r.width / r.height; camera.updateProjectionMatrix(); }
+new ResizeObserver(resize).observe(view); resize();
+(function loop() { requestAnimationFrame(loop); controls.update(); renderer.render(scene, camera); })();
+
+let state = { dem: null, water: null, fitted: false, key: '' };
+
+async function rebuildPreview() {
+  if (!state.dem) return;
+  const p = params();
+  const maxV = 260000; const pp = Math.max(p.pitch, Math.sqrt(p.printW * p.printD / maxV));
+  const m = computeModel(p, state.dem, makeWaterRaster(p, state.water), pp);
+  const { nx, ny, xs, ys, Zc, TR, W } = m, N = nx * ny;
+  const pos = new Float32Array(N * 3), wat = new Float32Array(N);
+  for (let r = 0; r < ny; r++) for (let c = 0; c < nx; c++) { const i = r * nx + c; pos[i * 3] = xs[c]; pos[i * 3 + 1] = ys[r]; pos[i * 3 + 2] = Zc[i] + TR[i]; wat[i] = W[i]; }
+  const idx = new Uint32Array((nx - 1) * (ny - 1) * 6); let k = 0;
+  for (let r = 0; r < ny - 1; r++) for (let c = 0; c < nx - 1; c++) { const a = r * nx + c; idx[k++] = a; idx[k++] = a + 1; idx[k++] = a + nx + 1; idx[k++] = a; idx[k++] = a + nx + 1; idx[k++] = a + nx; }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('water', new THREE.BufferAttribute(wat, 1)); g.setIndex(new THREE.BufferAttribute(idx, 1)); g.computeVertexNormals();
+  // side walls
+  const per = []; for (let c = 0; c < nx; c++) per.push(c); for (let r = 1; r < ny; r++) per.push(r * nx + nx - 1); for (let c = nx - 2; c >= 0; c--) per.push((ny - 1) * nx + c); for (let r = ny - 2; r >= 0; r--) per.push(r * nx);
+  const wp = [];
+  for (let q = 0; q < per.length - 1; q++) {
+    const a = per[q], b = per[q + 1]; const ax = pos[a * 3], ay = pos[a * 3 + 1], az = Zc[a], bx = pos[b * 3], by = pos[b * 3 + 1], bz = Zc[b];
+    wp.push(ax, ay, p.base, bx, by, p.base, bx, by, bz, ax, ay, p.base, bx, by, bz, ax, ay, az);
+  }
+  const gw = new THREE.BufferGeometry(); gw.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3)); gw.setAttribute('water', new THREE.Float32BufferAttribute(new Float32Array(wp.length / 3), 1)); gw.computeVertexNormals();
+  for (const ch of [...group.children]) { ch.geometry.dispose(); group.remove(ch); }
+  group.add(new THREE.Mesh(g, terrainMat), new THREE.Mesh(gw, terrainMat));
+  const bx = new THREE.Mesh(new THREE.BoxGeometry(p.printW, p.printD + p.strip, p.base), baseMat); bx.position.set(p.printW / 2, (p.printD - p.strip) / 2, p.base / 2); group.add(bx);
+  if (p.strip > 0) {
+    const { cv } = await textCanvas(p, '#ffffff');
+    if (labelTex) labelTex.dispose(); labelTex = new THREE.CanvasTexture(cv); labelTex.colorSpace = THREE.SRGBColorSpace; labelTex.anisotropy = 8;
+    labelMat.map = labelTex; labelMat.needsUpdate = true;
+    const lm = new THREE.Mesh(new THREE.PlaneGeometry(p.printW, p.strip), labelMat); lm.position.set(p.printW / 2, -p.strip / 2, p.base + p.textH); group.add(lm);
+  }
+  updateColors(m.sheets);
+  const bh = p.bed / 2, cx = p.printW / 2, cy = (p.printD - p.strip) / 2;
+  bedLine.geometry.setFromPoints([new THREE.Vector3(cx - bh, cy - bh, 0), new THREE.Vector3(cx + bh, cy - bh, 0), new THREE.Vector3(cx + bh, cy + bh, 0), new THREE.Vector3(cx - bh, cy + bh, 0)]);
+  if (!state.fitted) {
+    controls.target.set(cx, cy, m.zmax / 3);
+    camera.position.set(cx - p.printW * 0.3, cy - p.printD * 1.55, Math.max(p.printW, p.printD) * 1.15); state.fitted = true;
+  }
+  const fits = p.printW <= p.bed && p.printD + p.strip <= p.bed;
+  $('hud').innerHTML = `<b>${p.printW.toFixed(0)} × ${(p.printD + p.strip).toFixed(0)} × ${m.zmax.toFixed(1)} mm</b>${fits ? '' : ' <span style="color:#ff7a6b">larger than bed</span>'}<br>` +
+    `Elevation ${m.hmin.toFixed(0)}–${m.hmax.toFixed(0)} m · scale 1:${Math.round(1e6 / m.scale).toLocaleString('de-AT')}<br>` +
+    `${m.sheets.length} contour lines${m.sheets.length ? ` (${m.sheets[0][2]}–${m.sheets[m.sheets.length - 1][2]} m)` : ''} · water ${state.water ? 'on' : 'unavailable'}`;
+}
+function updateColors(sheets) {
+  if (sheets) { U.uN.value = Math.min(64, sheets.length); sheets.slice(0, 64).forEach((s, i) => U.uSheets.value[i].set(s[0], s[1])); }
+  U.uGray.value.set($('cGray').value); U.uYel.value.set($('cAccent').value); U.uBlue.value.set($('cWater').value);
+  baseMat.color.set($('cBase').value); labelMat.color.set($('cAccent').value);
+}
+
+// ---------- loading ----------
+let loadSeq = 0;
+async function loadArea() {
+  const seq = ++loadSeq; const p = params();
+  if (!parseCoords($('coords').value)) { setStatus('Could not read the coordinates — use e.g. "47.115, 15.45".', true); return; }
+  updateMap(true); busy(true, 'Loading terrain…'); $('fetchBtn').disabled = true;
+  try {
+    const waterP = loadWater(p).catch(err => { console.warn(err); return null; });
+    const dem = await loadDEM(p);
+    if (seq !== loadSeq) return;
+    state.dem = dem; state.water = null; state.fitted = false; state.key = JSON.stringify([p.lat, p.lon, p.areaKm, p.printW, p.printD]);
+    setStatus('Terrain loaded — loading rivers & lakes in the background…');
+    await rebuildPreview();
+    $('dl3mf').disabled = $('dlStl').disabled = false;
+    busy(false);
+    waterP.then(async water => {
+      if (seq !== loadSeq) return;
+      state.water = water;
+      if (water) { await rebuildPreview(); setStatus('Terrain and water loaded.'); }
+      else setStatus('Terrain loaded. River data (OpenStreetMap) not reachable right now — model without rivers. Press "Load terrain" to retry.', true);
+    });
+  } catch (err) { console.error(err); setStatus(err.message + ' — check your internet connection.', true); }
+  finally { if (seq === loadSeq) { busy(false); $('fetchBtn').disabled = false; } }
+}
+let locTimer;
+function onLocationChange() { if ($('coords').value.trim() && !parseCoords($('coords').value)) { $('addr').value = $('coords').value; $('coords').value = ''; addrSearch(); return; } updateLine2(); updateMap(true); save(); clearTimeout(locTimer); locTimer = setTimeout(loadArea, 700); }
+$('fetchBtn').addEventListener('click', loadArea);
+for (const id of ['coords', 'areaKm', 'printW', 'printD']) $(id).addEventListener('change', onLocationChange);
+let pvTimer;
+const schedule = () => { save(); clearTimeout(pvTimer); pvTimer = setTimeout(() => rebuildPreview().catch(e => setStatus(e.message, true)), 120); };
+for (const id of ['bed','pitch','vex','base','floor','smooth','interval','firstContour','sheetLayers','layer','riverW','carve','strip','textH','textScale','line1','line2','wRivers','wStreams','wLakes']) $(id).addEventListener('input', schedule);
+for (const id of ['cAccent','cGray','cWater','cBase','tAccent','tGray','tWater','tBase']) $(id).addEventListener('input', () => { save(); updateColors(); });
+
+// ---------- export ----------
+function slug() { return ($('line1').value || 'relief').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w]+/g, '_').replace(/^_|_$/g, '').toLowerCase() || 'relief'; }
+function download(u8, name, type) {
+  const url = URL.createObjectURL(new Blob([u8], { type })); const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 20000);
+}
+async function buildExport() {
+  const p = params();
+  busy(true, 'Building meshes…'); await nextFrame();
+  const m = computeModel(p, state.dem, makeWaterRaster(p, state.water), p.pitch);
+  const tm = await textMask(p);
+  const B = buildBodies(p, m, tm);
+  const parts = [
+    { name: 'base', body: B.base, tool: +$('tBase').value },
+    { name: 'terrain', body: B.gray, tool: +$('tGray').value },
+    { name: 'contours_text', body: B.accent, tool: +$('tAccent').value },
+    { name: 'water', body: B.water, tool: +$('tWater').value },
+  ].filter(x => x.body && x.body.F.length);
+  return { p, m, parts };
+}
+$('dl3mf').addEventListener('click', async () => {
+  try {
+    const { p, m, parts } = await buildExport();
+    busy(true, 'Writing 3MF…'); await nextFrame();
+    const files = build3MF(parts, p, $('line1').value || 'Relief');
+    busy(true, 'Compressing…'); await nextFrame();
+    const zip = zipSync(files, { level: 6 });
+    download(zip, slug() + '_relief.3mf', 'model/3mf');
+    const tris = parts.reduce((s, x) => s + x.body.F.length / 3, 0);
+    $('exportInfo').textContent = `3MF: ${parts.length} parts, ${(tris / 1e6).toFixed(2)} M triangles, ${(zip.length / 1e6).toFixed(1)} MB. Tools: ` + parts.map(x => `${x.name} → T${x.tool}`).join(', ');
+  } catch (err) { console.error(err); setStatus('Export failed: ' + err.message, true); }
+  finally { busy(false); }
+});
+$('dlStl').addEventListener('click', async () => {
+  try {
+    const { parts } = await buildExport();
+    busy(true, 'Writing STLs…'); await nextFrame();
+    const files = {}; parts.forEach((x, i) => files[`${slug()}_${i + 1}_${x.name}_T${x.tool}.stl`] = buildSTL(x.body, x.name));
+    const zip = zipSync(files, { level: 6 });
+    download(zip, slug() + '_relief_stls.zip', 'application/zip');
+    $('exportInfo').textContent = 'STLs: drag all files into the slicer at once and answer "Yes" to load them as one multi-part object.';
+  } catch (err) { console.error(err); setStatus('Export failed: ' + err.message, true); }
+  finally { busy(false); }
+});
+
+loadArea();
+</script>
+</body>
+</html>

@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Town Maker – 3D buildings to multi-color 3MF</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+  "fflate": "https://cdn.jsdelivr.net/npm/fflate@0.8.2/esm/browser.js"
+} }
+</script>
+<style>
+  :root { --bg:#111317; --panel:#181b21; --line:#262a33; --text:#e8eaee; --mute:#8b919c; --acc:#f6c21c; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--text); font:13px/1.4 Inter, system-ui, sans-serif; }
+  #app { display:grid; grid-template-columns: 380px 1fr; height:100vh; }
+  aside { background:var(--panel); border-right:1px solid var(--line); overflow-y:auto; padding:14px 16px 40px; }
+  h1 { font:700 18px Poppins, sans-serif; margin:0 0 2px; letter-spacing:.2px; }
+  h1 span { color:var(--acc); }
+  .sub { color:var(--mute); margin-bottom:12px; }
+  #map { height:210px; border-radius:8px; border:1px solid var(--line); margin-bottom:8px; }
+  details { border-top:1px solid var(--line); padding:8px 0; }
+  summary { cursor:pointer; font-weight:600; padding:4px 0; list-style:none; display:flex; justify-content:space-between; }
+  summary::after { content:'+'; color:var(--mute); } details[open] summary::after { content:'–'; }
+  .row { display:grid; grid-template-columns: 1fr 120px; align-items:center; gap:8px; margin:6px 0; }
+  .row.full { grid-template-columns: 1fr; }
+  .row label { color:#c7cbd3; }
+  .row small, .hint { color:var(--mute); display:block; font-size:11px; }
+  input[type=text], input[type=number], select { width:100%; background:#0f1115; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:6px 8px; font:inherit; }
+  input[type=range] { width:100%; accent-color: var(--acc); }
+  .rng { display:grid; grid-template-columns: 1fr 52px; gap:6px; align-items:center; }
+  .rng output { text-align:right; color:var(--acc); font-variant-numeric: tabular-nums; }
+  .check { display:flex; gap:8px; align-items:center; margin:5px 0; color:#c7cbd3; }
+  button { background:var(--acc); color:#111; border:0; border-radius:7px; padding:9px 12px; font:600 13px Inter, sans-serif; cursor:pointer; width:100%; }
+  button.sec { background:#2a2f39; color:var(--text); }
+  button:disabled { opacity:.5; cursor:default; }
+  .btns { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; }
+  .addr { display:grid; grid-template-columns: 1fr 64px; gap:6px; margin-top:4px; }
+  .addr button { padding:6px 8px; }
+  #addrResults { display:flex; flex-direction:column; gap:3px; margin-top:4px; }
+  #addrResults button { text-align:left; background:#0f1115; color:var(--text); border:1px solid var(--line); font-weight:400; padding:6px 8px; }
+  #addrResults button:hover, #addrResults button.on { border-color:var(--acc); }
+  #addrResults button small { color:var(--mute); display:block; font-size:11px; }
+  .pal { display:grid; grid-template-columns: repeat(4, 1fr); gap:6px; margin:6px 0 10px; }
+  .pal label { display:flex; flex-direction:column; align-items:center; gap:3px; color:var(--mute); font-size:11px; }
+  .pal input[type=color] { width:100%; height:30px; border:1px solid var(--line); border-radius:6px; background:none; padding:0; }
+  .role { display:grid; grid-template-columns: 14px 1fr 70px; gap:8px; align-items:center; margin:5px 0; }
+  .role i { width:14px; height:14px; border-radius:4px; border:1px solid #0006; display:block; }
+  #status { margin-top:8px; color:var(--mute); min-height:18px; font-size:12px; }
+  #status.err { color:#ff7a6b; }
+  main { position:relative; }
+  #view { position:absolute; inset:0; }
+  #hud { position:absolute; left:14px; bottom:12px; background:rgba(17,19,23,.85); border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:12px; color:#c7cbd3; pointer-events:none; max-width:min(520px, calc(100% - 28px)); }
+  #hud b { color:var(--text); }
+  #tip { position:absolute; right:14px; top:12px; background:rgba(17,19,23,.85); border:1px solid var(--line); border-radius:8px; padding:7px 10px; font-size:12px; color:#c7cbd3; pointer-events:none; }
+  #busy { position:absolute; inset:0; display:none; align-items:center; justify-content:center; background:rgba(10,11,14,.55); font:600 15px Inter; text-align:center; padding:20px; }
+  #busy.on { display:flex; }
+  .attr { color:var(--mute); font-size:11px; margin-top:14px; }
+  .attr a { color:var(--mute); }
+  @media (max-width: 820px) { #app { grid-template-columns: 1fr; grid-template-rows: auto 60vh; height:auto; } aside { border-right:0; } main { height:60vh; } }
+</style>
+</head>
+<body>
+<div id="app">
+<aside>
+  <h1>Town <span>Maker</span></h1>
+  <div class="sub">Your street in 3D: buildings, roads and water on real terrain, as a multi-color 3MF.</div>
+  <div id="map"></div>
+  <div class="row full"><label>Address or place
+    <div class="addr"><input type="text" id="addr" placeholder="e.g. Hauptplatz 1, 8010 Graz" autocomplete="off"><button id="addrBtn" class="sec">Find</button></div></label>
+    <div id="addrResults"></div>
+    <label class="check"><input type="checkbox" id="addrLabel"> Use the found place as the label name</label></div>
+  <div class="row full"><label>Center (lat, lon) — or click the map
+    <input type="text" id="coords" value="47.07120, 15.43860"></label></div>
+  <div class="row"><label>Area width (m)<small>real distance across the print</small></label><input type="number" id="areaM" value="350" min="100" max="3000" step="50"></div>
+  <button id="fetchBtn">Load area</button>
+  <div id="status"></div>
+
+  <details open><summary>Print size</summary>
+    <div class="row"><label>Map width (mm)</label><input type="number" id="printW" value="160" min="40" max="260"></div>
+    <div class="row"><label>Map depth (mm)</label><input type="number" id="printD" value="180" min="40" max="260"></div>
+    <div class="row"><label>Bed size (mm)<small>used to center the model</small></label><input type="number" id="bed" value="270" min="100" max="600"></div>
+    <div class="row"><label>Mesh resolution (mm)<small>ground detail: roads, trees, roofs. Smaller = finer, bigger file</small></label><input type="number" id="pitch" value="0.3" min="0.2" max="1.5" step="0.05"></div>
+  </details>
+
+  <details open><summary>Buildings</summary>
+    <label class="check"><input type="checkbox" id="buildings" checked> Show buildings</label>
+    <div class="row"><label>Height scale</label><div class="rng"><input type="range" id="bex" min="1" max="4" step="0.1" value="1.5"><output></output></div></div>
+    <div class="row"><label>Height if unknown (m)</label><input type="number" id="defH" value="7" min="2" max="60" step="0.5"></div>
+    <div class="row"><label>Min. building height (mm)</label><input type="number" id="minBld" value="1.2" min="0.4" max="10" step="0.2"></div>
+    <div class="row"><label>Roof pitch<small>0 = all roofs flat</small></label><div class="rng"><input type="range" id="roofPitch" min="0" max="50" step="1" value="35"><output></output></div></div>
+    <div class="row"><label>Pitched roofs up to width (m)<small>wider buildings stay flat</small></label><input type="number" id="roofMaxW" value="24" min="4" max="80" step="1"></div>
+    <label class="check"><input type="checkbox" id="autoHouse" checked> Highlight the buildings at the searched address</label>
+    <label class="check"><input type="checkbox" id="outbuildings" checked> Include garages &amp; sheds on the same property</label>
+    <div class="hint">Click any building in the 3D view to highlight it or remove the highlight.</div>
+    <div class="btns" style="grid-template-columns:1fr"><button id="clearHi" class="sec">Clear highlights</button></div>
+  </details>
+
+  <details open><summary>Trees &amp; fields</summary>
+    <label class="check"><input type="checkbox" id="forest" checked> Forests (tree crowns)</label>
+    <label class="check"><input type="checkbox" id="parkTrees" checked> Trees in parks &amp; gardens</label>
+    <div class="row"><label>Tree height (m)</label><input type="number" id="treeH" value="12" min="3" max="40" step="1"></div>
+    <div class="row"><label>Crown size (m)</label><input type="number" id="crown" value="7" min="2" max="20" step="0.5"></div>
+    <div class="row"><label>Tree height scale</label><div class="rng"><input type="range" id="treeScale" min="0.3" max="2" step="0.1" value="1"><output></output></div></div>
+    <label class="check"><input type="checkbox" id="fields" checked> Plowed-field texture on farmland</label>
+    <div class="row"><label>Furrow depth (mm)</label><input type="number" id="grooveDepth" value="0.3" min="0.1" max="1" step="0.05"></div>
+    <div class="row"><label>Furrow spacing (mm)</label><input type="number" id="grooveSpacing" value="1.2" min="0.8" max="4" step="0.1"></div>
+  </details>
+
+  <details open><summary>Terrain, roads &amp; water</summary>
+    <div class="row"><label>Terrain exaggeration</label><div class="rng"><input type="range" id="vex" min="0" max="4" step="0.1" value="1.5"><output></output></div></div>
+    <div class="row"><label>Terrain smoothing</label><div class="rng"><input type="range" id="smooth" min="0" max="5" step="1" value="1"><output></output></div></div>
+    <div class="row"><label>Base thickness (mm)</label><input type="number" id="base" value="3" min="1" max="10" step="0.2"></div>
+    <div class="row"><label>Min. ground above base (mm)</label><input type="number" id="floor" value="1.5" min="0.6" max="10" step="0.2"></div>
+    <label class="check"><input type="checkbox" id="roads" checked> Roads</label>
+    <label class="check"><input type="checkbox" id="paths" checked> Footpaths &amp; tracks</label>
+    <label class="check"><input type="checkbox" id="rails" checked> Railways &amp; trams (raised)</label>
+    <div class="row"><label>Road width scale</label><div class="rng"><input type="range" id="roadScale" min="0.5" max="3" step="0.1" value="1"><output></output></div></div>
+    <div class="row"><label>Min. road width (mm)</label><input type="number" id="minRoad" value="0.8" min="0.3" max="4" step="0.1"></div>
+    <label class="check"><input type="checkbox" id="water" checked> Rivers &amp; lakes</label>
+    <label class="check"><input type="checkbox" id="streams"> Small streams</label>
+    <div class="row"><label>Inlay depth (mm)<small>roads and water</small></label><input type="number" id="carve" value="0.6" min="0.4" max="2" step="0.1"></div>
+  </details>
+
+  <details open><summary>Label strip</summary>
+    <div class="row full"><label>Name<input type="text" id="line1" value="GRAZ · HAUPTPLATZ"></label></div>
+    <div class="row full"><label>Second line <small>auto-filled with coordinates until you edit it</small><input type="text" id="line2" value=""></label></div>
+    <div class="row"><label>Strip depth (mm)<small>0 = no label</small></label><input type="number" id="strip" value="16" min="0" max="40" step="1"></div>
+    <div class="row"><label>Text height (mm)</label><input type="number" id="textH" value="0.6" min="0.2" max="3" step="0.2"></div>
+    <div class="row"><label>Text size</label><div class="rng"><input type="range" id="textScale" min="0.5" max="1.4" step="0.05" value="1"><output></output></div></div>
+  </details>
+
+  <details open><summary>Filaments &amp; tools</summary>
+    <div class="pal">
+      <label>T1<input type="color" id="col1" value="#f6c21c"></label>
+      <label>T2<input type="color" id="col2" value="#a3a6aa"></label>
+      <label>T3<input type="color" id="col3" value="#5fc3d6"></label>
+      <label>T4<input type="color" id="col4" value="#17181b"></label>
+    </div>
+    <div id="roles"></div>
+  </details>
+
+  <div class="btns"><button id="dl3mf" disabled>Download 3MF</button><button id="dlStl" class="sec" disabled>STLs (zip)</button></div>
+  <div id="exportInfo" class="sub" style="margin-top:8px"></div>
+  <div class="attr">Buildings, roads &amp; water: © <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors (heights from OSM tags, otherwise estimated). Elevation: <a href="https://registry.opendata.aws/terrain-tiles/" target="_blank">AWS Terrain Tiles</a>. Address search: Photon / Nominatim. Map tiles: Esri.</div>
+</aside>
+<main>
+  <div id="view"></div>
+  <div id="tip">Drag to rotate · scroll to zoom · click a building to highlight it</div>
+  <div id="hud">Search an address to start.</div>
+  <div id="busy">Working…</div>
+</main>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { zipSync } from 'fflate';
+
+/*CORE*/
+/*EARCUT*/
+/*TOWNCORE*/
+/*MVT*/
+
+const $ = id => document.getElementById(id);
+const statusEl = $('status');
+const setStatus = (t, err) => { statusEl.textContent = t; statusEl.className = err ? 'err' : ''; if ($('busy').classList.contains('on') && !err) $('busy').textContent = t; };
+const busy = (on, t) => { $('busy').classList.toggle('on', on); if (t) $('busy').textContent = t; };
+const nextFrame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+
+// ---------- roles / tools ----------
+const ROLES = [['house', 'Highlighted (your house)', 1], ['buildings', 'Buildings', 2], ['trees', 'Trees', 2], ['rail', 'Railways', 1], ['roads', 'Roads & paths', 4], ['water', 'Water', 3], ['ground', 'Ground', 2], ['base', 'Base', 4], ['text', 'Label text', 1]];
+for (const [k, label, t] of ROLES) {
+  const d = document.createElement('div'); d.className = 'role';
+  d.innerHTML = `<i id="sw_${k}"></i><span>${label}</span><select id="tool_${k}">${[1, 2, 3, 4].map(i => `<option value="${i}">T${i}</option>`).join('')}</select>`;
+  $('roles').appendChild(d); $('tool_' + k).value = t;
+}
+const toolColor = k => $('col' + $('tool_' + k).value).value;
+
+// ---------- params ----------
+const NUM = ['areaM','printW','printD','bed','pitch','bex','defH','minBld','roofPitch','roofMaxW','treeH','crown','treeScale','grooveDepth','grooveSpacing','vex','smooth','base','floor','roadScale','minRoad','carve','strip','textH','textScale'];
+const BOOL = ['buildings','autoHouse','outbuildings','forest','parkTrees','fields','roads','paths','rails','water','streams','addrLabel'];
+const SAVE = [...NUM, ...BOOL, 'coords','line1','line2','col1','col2','col3','col4', ...ROLES.map(r => 'tool_' + r[0])];
+let line2Auto = true;
+try { const s = JSON.parse(localStorage.getItem('townMaker2') || 'null'); if (s) { for (const k of SAVE) if (k in s && $(k)) { const el = $(k); if (el.type === 'checkbox') el.checked = s[k]; else el.value = s[k]; } line2Auto = s.line2Auto !== false; } } catch (e) {}
+function save() { try { const s = { line2Auto }; for (const k of SAVE) { const el = $(k); s[k] = el.type === 'checkbox' ? el.checked : el.value; } localStorage.setItem('townMaker2', JSON.stringify(s)); } catch (e) {} }
+
+/*PARSE*/
+
+function params() {
+  const p = {}; for (const k of NUM) p[k] = parseFloat($(k).value) || 0; for (const k of BOOL) p[k] = $(k).checked;
+  const c = parseCoords($('coords').value) || [47.0712, 15.4386]; p.lat = c[0]; p.lon = c[1];
+  p.areaKm = Math.min(Math.max(p.areaM, 50), 5000) / 1000; p.pitch = Math.max(0.2, p.pitch); p.minWater = 1.0;
+  if (p.strip > 0 && p.strip < 6) p.strip = 6;
+  return p;
+}
+function updateLine2() { if (!line2Auto) return; const p = params(); $('line2').value = `${dm(p.lat, 'N', 'S')}   ${dm(p.lon, 'E', 'W')}`; }
+$('line2').addEventListener('input', () => { line2Auto = $('line2').value.trim() === ''; save(); });
+if (line2Auto || !$('line2').value) { line2Auto = true; updateLine2(); }
+for (const el of document.querySelectorAll('.rng')) {
+  const r = el.querySelector('input'), o = el.querySelector('output');
+  const f = () => o.textContent = (+r.value).toFixed(r.step < 1 ? (r.step < 0.1 ? 2 : 1) : 0) + (['bex', 'vex', 'roadScale', 'treeScale'].includes(r.id) ? '×' : r.id === 'roofPitch' ? '°' : '');
+  r.addEventListener('input', f); f();
+}
+
+// ---------- map ----------
+const map = L.map('map', { zoomControl: true, attributionControl: false });
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 }).addTo(map);
+const rect = L.rectangle([[0, 0], [0, 0]], { color: '#f6c21c', weight: 2, fillOpacity: 0.06 }).addTo(map);
+const marker = L.circleMarker([0, 0], { radius: 4, color: '#f6c21c' }).addTo(map);
+function areaBounds(p) { const { areaKmY } = geom(p); const dLat = areaKmY / 2 / KM_LAT, dLon = p.areaKm / 2 / kmLon(p.lat); return [[p.lat - dLat, p.lon - dLon], [p.lat + dLat, p.lon + dLon]]; }
+function updateMap(fit) { const p = params(); const b = areaBounds(p); rect.setBounds(b); marker.setLatLng([p.lat, p.lon]); if (fit) map.fitBounds(b, { padding: [10, 10] }); }
+updateMap(true);
+map.on('click', e => { state.addr = null; $('coords').value = `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`; onLocationChange(); });
+
+// ---------- address search ----------
+/*GEOCODE*/
+function applyPlace(pl, btn) {
+  state.addr = { lat: pl.lat, lon: pl.lon, hn: pl.hn || '', name: pl.name };
+  $('coords').value = `${pl.lat.toFixed(5)}, ${pl.lon.toFixed(5)}`;
+  if ($('addrLabel').checked) $('line1').value = pl.short.toUpperCase();
+  for (const b of $('addrResults').children) b.classList.toggle('on', b === btn);
+  onLocationChange();
+}
+async function addrSearch() {
+  const q = $('addr').value.trim(); if (!q) return;
+  const ll = parseCoords(q);
+  if (ll && /^[\s\d.,°'′"″NSEWnsew+-]+$/.test(q)) { $('coords').value = `${ll[0].toFixed(5)}, ${ll[1].toFixed(5)}`; $('addrResults').innerHTML = ''; onLocationChange(); return; }
+  $('addrBtn').disabled = true; setStatus('Looking up address…');
+  try {
+    const res = await geocode(q);
+    $('addrResults').innerHTML = '';
+    if (!res.length) { setStatus(`Nothing found for "${q}".`, true); return; }
+    res.forEach(pl => {
+      const b = document.createElement('button'); b.type = 'button';
+      b.innerHTML = `${esc(pl.name)}<small>${esc(pl.detail)} · ${pl.lat.toFixed(5)}, ${pl.lon.toFixed(5)}</small>`;
+      b.onclick = () => applyPlace(pl, b); $('addrResults').appendChild(b);
+    });
+    applyPlace(res[0], $('addrResults').firstChild);
+  } catch (e) { console.error(e); setStatus(e.message + ' — check your internet connection.', true); }
+  finally { $('addrBtn').disabled = false; }
+}
+$('addrBtn').addEventListener('click', addrSearch);
+$('addr').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addrSearch(); } });
+
+// ---------- data ----------
+/*DEM*/
+async function fetchT(url, opt = {}, ms = 20000) {
+  const ac = new AbortController(), to = setTimeout(() => ac.abort(), ms);
+  try { return await fetch(url, { ...opt, signal: ac.signal }); } finally { clearTimeout(to); }
+}
+let ofmTiles = null;
+async function loadOFM(p) {             // OpenFreeMap vector tiles (OpenMapTiles schema, z14)
+  if (!ofmTiles) { const r = await fetchT('https://tiles.openfreemap.org/planet'); if (!r.ok) throw new Error('OpenFreeMap HTTP ' + r.status); ofmTiles = (await r.json()).tiles[0]; }
+  const [[s, w], [n, e]] = areaBounds(p), z = 14;
+  const tx0 = Math.floor(lon2px(w, z) / 256), tx1 = Math.floor(lon2px(e, z) / 256), ty0 = Math.floor(lat2px(n, z) / 256), ty1 = Math.floor(lat2px(s, z) / 256);
+  if ((tx1 - tx0 + 1) * (ty1 - ty0 + 1) > 64) throw new Error('Area too large for building data — use max. ~5 km');
+  const jobs = [];
+  for (let x = tx0; x <= tx1; x++) for (let y = ty0; y <= ty1; y++) jobs.push((async () => {
+    const r = await fetchT(ofmTiles.replace('{z}', z).replace('{x}', x).replace('{y}', y));
+    if (r.status === 204 || r.status === 404) return { z, x, y, layers: {} };
+    if (!r.ok) throw new Error('OpenFreeMap tile HTTP ' + r.status);
+    return { z, x, y, layers: mvtDecode(new Uint8Array(await r.arrayBuffer()), ['building', 'transportation', 'water', 'waterway', 'landcover', 'park', 'housenumber']) };
+  })());
+  return omtToFeatures(await Promise.all(jobs));
+}
+async function loadOverpass(p) {
+  const [[s, w], [n, e]] = areaBounds(p);
+  const pad = 0.0005, bb = [s - pad, w - pad, n + pad, e + pad].map(v => v.toFixed(5)).join(',');
+  const q = `[out:json][timeout:60];(way["building"](${bb});relation["building"]["type"="multipolygon"](${bb});way["highway"](${bb});way["waterway"~"^(river|canal|stream|riverbank)$"](${bb});way["natural"="water"](${bb});relation["natural"="water"](${bb});way["railway"](${bb});way["landuse"~"^(forest|farmland)$"](${bb});way["natural"="wood"](${bb});relation["landuse"="forest"](${bb});relation["natural"="wood"](${bb});way["leisure"~"^(park|garden)$"](${bb});node["addr:housenumber"](${bb}););out geom;`;
+  let lastErr;
+  for (const url of ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://overpass.kumi.systems/api/interpreter']) {
+    try {
+      setStatus('Trying backup source: ' + new URL(url).host + '…');
+      const r = await fetchT(url, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }, 25000);
+      if (!r.ok) throw new Error('Overpass HTTP ' + r.status);
+      return parseOSM(await r.json());
+    } catch (err) { console.warn(url, err); lastErr = err; }
+  }
+  throw lastErr || new Error('Overpass not reachable');
+}
+const osmCache = new Map();
+async function loadOSM(p) {
+  const key = areaBounds(p).flat().map(v => v.toFixed(5)).join(',');
+  if (osmCache.has(key)) return osmCache.get(key);
+  let osm, src;
+  try { setStatus('Loading buildings & roads (OpenFreeMap)…'); osm = await loadOFM(p); src = 'OpenFreeMap'; }
+  catch (err) { console.warn('OpenFreeMap failed', err); osm = await loadOverpass(p); src = 'Overpass'; }
+  osm.source = src; osmCache.set(key, osm); return osm;
+}
+
+// ---------- label ----------
+/*LABEL*/
+
+// ---------- 3D preview ----------
+const view = $('view');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); view.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x111317);
+const camera = new THREE.PerspectiveCamera(40, 1, 1, 5000); camera.up.set(0, 0, 1);
+const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true;
+scene.add(new THREE.HemisphereLight(0xffffff, 0x404048, 1.1));
+const sun = new THREE.DirectionalLight(0xffffff, 2.2); sun.position.set(-200, 250, 300); scene.add(sun);
+const fillL = new THREE.DirectionalLight(0xffffff, 0.6); fillL.position.set(250, -200, 120); scene.add(fillL);
+const group = new THREE.Group(); scene.add(group);
+const bedLine = new THREE.LineLoop(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x3a3f4a })); scene.add(bedLine);
+
+const roleMats = {}; for (const [k] of ROLES) roleMats[k] = new THREE.MeshStandardMaterial({ roughness: 0.8, metalness: 0, flatShading: true });
+const labelMat = new THREE.MeshStandardMaterial({ transparent: true, alphaTest: 0.5, roughness: 0.8 });
+let labelTex = null, pickMeshes = [];
+function resize() { const r = view.getBoundingClientRect(); renderer.setSize(r.width, r.height); camera.aspect = r.width / r.height; camera.updateProjectionMatrix(); }
+new ResizeObserver(resize).observe(view); resize();
+(function loop() { requestAnimationFrame(loop); controls.update(); renderer.render(scene, camera); })();
+
+let state = { dem: null, osm: null, highlight: new Set(), model: null, fitted: false, addr: null };
+
+function toGeom(body) {
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(body.V, 3)); g.setIndex(new THREE.BufferAttribute(body.F, 1)); g.computeVertexNormals(); return g;
+}
+async function rebuildPreview() {
+  if (!state.dem) return;
+  const p = params();
+  const maxV = 300000; const pp = Math.max(p.pitch, Math.sqrt(p.printW * p.printD / maxV));
+  const m = computeTown(p, state.dem, state.osm, state.highlight, pp); state.model = m;
+  const B = buildTownBodies({ ...p, strip: p.strip }, m, null);
+  for (const ch of [...group.children]) { ch.geometry.dispose(); group.remove(ch); }
+  pickMeshes = [];
+  for (const [k] of ROLES) { if (k === 'text' || !B[k] || !B[k].F.length) continue; const mesh = new THREE.Mesh(toGeom(B[k]), roleMats[k]); group.add(mesh); pickMeshes.push(mesh); }
+  if (p.strip > 0) {
+    const { cv } = await textCanvas(p, '#ffffff');
+    if (labelTex) labelTex.dispose(); labelTex = new THREE.CanvasTexture(cv); labelTex.colorSpace = THREE.SRGBColorSpace; labelTex.anisotropy = 8;
+    labelMat.map = labelTex; labelMat.needsUpdate = true;
+    const lm = new THREE.Mesh(new THREE.PlaneGeometry(p.printW, p.strip), labelMat); lm.position.set(p.printW / 2, -p.strip / 2, p.base + p.textH); group.add(lm);
+  }
+  updateColors();
+  const bh = p.bed / 2, cx = p.printW / 2, cy = (p.printD - p.strip) / 2;
+  bedLine.geometry.setFromPoints([new THREE.Vector3(cx - bh, cy - bh, 0), new THREE.Vector3(cx + bh, cy - bh, 0), new THREE.Vector3(cx + bh, cy + bh, 0), new THREE.Vector3(cx - bh, cy + bh, 0)]);
+  if (!state.fitted) { controls.target.set(cx, cy, m.zmax / 4); camera.position.set(cx - p.printW * 0.3, cy - p.printD * 1.4, Math.max(p.printW, p.printD) * 1.05); state.fitted = true; }
+  const fits = p.printW <= p.bed && p.printD + p.strip <= p.bed;
+  const nB = m.blds.filter(Boolean).length, nP = m.pitched.filter(Boolean).length;
+  $('hud').innerHTML = `<b>${p.printW.toFixed(0)} × ${(p.printD + p.strip).toFixed(0)} × ${m.zmax.toFixed(1)} mm</b>${fits ? '' : ' <span style="color:#ff7a6b">larger than bed</span>'}<br>` +
+    `Scale 1:${Math.round(1e6 / m.scale).toLocaleString('de-AT')} · 10 m = ${(m.scale / 100).toFixed(1)} mm · elevation ${m.hmin.toFixed(0)}–${m.hmax.toFixed(0)} m<br>` +
+    (state.osm ? `${nB} buildings (${nP} pitched roofs) · ${m.nTrees} trees · ${state.highlight.size} highlighted` : 'Buildings not loaded yet') + (pp > p.pitch ? `<br>Preview at ${pp.toFixed(2)} mm, export at ${p.pitch} mm` : '');
+}
+function updateColors() {
+  for (const [k] of ROLES) { $('sw_' + k).style.background = toolColor(k); if (roleMats[k]) roleMats[k].color.set(toolColor(k)); }
+  labelMat.color.set(toolColor('text'));
+}
+updateColors();
+
+// click a building to toggle highlight
+const ray = new THREE.Raycaster(); let downAt = null;
+renderer.domElement.addEventListener('pointerdown', e => { downAt = [e.clientX, e.clientY]; });
+renderer.domElement.addEventListener('pointerup', e => {
+  if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 5 || !pickMeshes.length || !state.model) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  ray.setFromCamera(new THREE.Vector2((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1), camera);
+  const hit = ray.intersectObjects(pickMeshes)[0]; if (!hit) return;
+  const m = state.model, c0 = Math.round(hit.point.x / m.dx), r0 = Math.round(hit.point.y / m.dy);
+  let id = -1;
+  for (let rad = 0; rad <= 2 && id < 0; rad++) for (let j = -rad; j <= rad && id < 0; j++) for (let i = -rad; i <= rad && id < 0; i++) {
+    const c = c0 + i, rr = r0 + j; if (c >= 0 && c < m.nx && rr >= 0 && rr < m.ny && m.bid[rr * m.nx + c] >= 0) id = m.bid[rr * m.nx + c];
+  }
+  if (id < 0) return;
+  if (state.highlight.has(id)) state.highlight.delete(id); else state.highlight.add(id);
+  rebuildPreview();
+});
+$('clearHi').addEventListener('click', () => { state.highlight.clear(); rebuildPreview(); });
+
+// ---------- loading ----------
+let loadSeq = 0;
+async function loadArea() {
+  const seq = ++loadSeq; const p = params();
+  if (!parseCoords($('coords').value)) { setStatus('Could not read the coordinates — use e.g. "47.0712, 15.4386".', true); return; }
+  updateMap(true); busy(true, 'Loading terrain…'); $('fetchBtn').disabled = true;
+  state.osm = null; state.highlight = new Set();
+  const osmP = loadOSM(p).then(o => ({ o }), err => ({ err }));
+  try {
+    const dem = await loadDEM(p);
+    if (seq !== loadSeq) return;
+    state.dem = dem; state.fitted = false;
+    await rebuildPreview();
+    busy(false);
+    setStatus('Terrain loaded — loading buildings & roads from OpenStreetMap…');
+    const { o, err } = await osmP;
+    if (seq !== loadSeq) return;
+    if (err) { setStatus('Buildings could not be loaded (OpenStreetMap server busy). Press "Load area" to retry.', true); return; }
+    state.osm = o;
+    const msg = highlightAddress();
+    await rebuildPreview();
+    $('dl3mf').disabled = $('dlStl').disabled = false;
+    setStatus(`Loaded ${o.buildings.length} buildings (${o.source}).` + msg);
+  } catch (err) { console.error(err); setStatus(err.message + ' — check your internet connection.', true); }
+  finally { if (seq === loadSeq) { busy(false); $('fetchBtn').disabled = false; } }
+}
+function highlightAddress() {
+  if (!$('autoHouse').checked || !state.osm) return '';
+  const p = params(), a = state.addr || { lat: p.lat, lon: p.lon, hn: '' };
+  const { set, anchor } = addressBuildings(state.osm, a, $('outbuildings').checked);
+  state.highlight = set;
+  const where = state.addr ? (state.addr.name || 'the address') : 'the center point';
+  if (!set.size) return ` No building found at ${where} — click one in the 3D view to highlight it.`;
+  return ` Highlighted ${set.size} building${set.size > 1 ? 's' : ''} at ${where}` + (a.hn && !anchor ? ' (house number not in map data, used the nearest building)' : '') + '.';
+}
+$('autoHouse').addEventListener('change', () => { if ($('autoHouse').checked) { const m = highlightAddress(); setStatus(m.trim()); } else state.highlight.clear(); rebuildPreview(); });
+$('outbuildings').addEventListener('change', () => { save(); if ($('autoHouse').checked) { setStatus(highlightAddress().trim()); rebuildPreview(); } });
+let locTimer;
+function onLocationChange() { if ($('coords').value.trim() && !parseCoords($('coords').value)) { $('addr').value = $('coords').value; $('coords').value = ''; addrSearch(); return; } updateLine2(); updateMap(true); save(); clearTimeout(locTimer); locTimer = setTimeout(loadArea, 700); }
+$('fetchBtn').addEventListener('click', loadArea);
+$('coords').addEventListener('change', () => { state.addr = null; onLocationChange(); });
+for (const id of ['areaM', 'printW', 'printD']) $(id).addEventListener('change', () => onLocationChange());
+let pvTimer;
+const schedule = () => { save(); clearTimeout(pvTimer); pvTimer = setTimeout(() => rebuildPreview().catch(e => setStatus(e.message, true)), 150); };
+for (const id of [...NUM.filter(k => !['areaM','printW','printD'].includes(k)), 'line1', 'line2', ...BOOL.filter(k => !['autoHouse','addrLabel'].includes(k))]) $(id).addEventListener('input', schedule);
+for (const id of ['autoHouse', 'addrLabel']) $(id).addEventListener('change', save);
+$('clearHi').addEventListener('click', () => { $('autoHouse').checked = false; save(); });
+for (const id of ['col1','col2','col3','col4', ...ROLES.map(r => 'tool_' + r[0])]) $(id).addEventListener('input', () => { save(); updateColors(); });
+
+// ---------- export ----------
+function slug() { return ($('line1').value || 'town').normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^\w]+/g, '_').replace(/^_|_$/g, '').toLowerCase() || 'town'; }
+function download(u8, name, type) { const url = URL.createObjectURL(new Blob([u8], { type })); const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 20000); }
+async function buildExport() {
+  const p = params();
+  busy(true, 'Building meshes…'); await nextFrame();
+  const m = computeTown(p, state.dem, state.osm, state.highlight, p.pitch);
+  const tm = await textMask(p);
+  const B = buildTownBodies(p, m, tm);
+  const parts = ROLES.map(([k]) => ({ name: k, body: B[k], tool: +$('tool_' + k).value })).filter(x => x.body && x.body.F && x.body.F.length);
+  return { p, parts };
+}
+$('dl3mf').addEventListener('click', async () => {
+  try {
+    const { p, parts } = await buildExport();
+    busy(true, 'Writing 3MF…'); await nextFrame();
+    const files = build3MF(parts, p, $('line1').value || 'Town');
+    busy(true, 'Compressing…'); await nextFrame();
+    const zip = zipSync(files, { level: 6 });
+    download(zip, slug() + '_town.3mf', 'model/3mf');
+    const tris = parts.reduce((s, x) => s + x.body.F.length / 3, 0);
+    $('exportInfo').textContent = `3MF: ${parts.length} parts, ${(tris / 1e6).toFixed(2)} M triangles, ${(zip.length / 1e6).toFixed(1)} MB. ` + parts.map(x => `${x.name} → T${x.tool}`).join(', ');
+  } catch (err) { console.error(err); setStatus('Export failed: ' + err.message, true); }
+  finally { busy(false); }
+});
+$('dlStl').addEventListener('click', async () => {
+  try {
+    const { parts } = await buildExport();
+    busy(true, 'Writing STLs…'); await nextFrame();
+    const files = {}; parts.forEach((x, i) => files[`${slug()}_${i + 1}_${x.name}_T${x.tool}.stl`] = buildSTL(x.body, x.name));
+    download(zipSync(files, { level: 6 }), slug() + '_town_stls.zip', 'application/zip');
+    $('exportInfo').textContent = 'STLs: drag all files into the slicer at once and answer "Yes" to load them as one multi-part object.';
+  } catch (err) { console.error(err); setStatus('Export failed: ' + err.message, true); }
+  finally { busy(false); }
+});
+
+loadArea();
+</script>
+</body>
+</html>

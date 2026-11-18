@@ -1,0 +1,2321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Town Maker – 3D buildings to multi-color 3MF</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+  "fflate": "https://cdn.jsdelivr.net/npm/fflate@0.8.2/esm/browser.js"
+} }
+</script>
+<style>
+  :root { --bg:#111317; --panel:#181b21; --line:#262a33; --text:#e8eaee; --mute:#8b919c; --acc:#f6c21c; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--text); font:13px/1.4 Inter, system-ui, sans-serif; }
+  #app { display:grid; grid-template-columns: 380px 1fr; height:100vh; }
+  aside { background:var(--panel); border-right:1px solid var(--line); overflow-y:auto; padding:14px 16px 40px; }
+  h1 { font:700 18px Poppins, sans-serif; margin:0 0 2px; letter-spacing:.2px; }
+  h1 span { color:var(--acc); }
+  .sub { color:var(--mute); margin-bottom:12px; }
+  #map { height:210px; border-radius:8px; border:1px solid var(--line); margin-bottom:8px; }
+  details { border-top:1px solid var(--line); padding:8px 0; }
+  summary { cursor:pointer; font-weight:600; padding:4px 0; list-style:none; display:flex; justify-content:space-between; }
+  summary::after { content:'+'; color:var(--mute); } details[open] summary::after { content:'–'; }
+  .row { display:grid; grid-template-columns: 1fr 120px; align-items:center; gap:8px; margin:6px 0; }
+  .row.full { grid-template-columns: 1fr; }
+  .row label { color:#c7cbd3; }
+  .row small, .hint { color:var(--mute); display:block; font-size:11px; }
+  input[type=text], input[type=number], select { width:100%; background:#0f1115; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:6px 8px; font:inherit; }
+  input[type=range] { width:100%; accent-color: var(--acc); }
+  .rng { display:grid; grid-template-columns: 1fr 52px; gap:6px; align-items:center; }
+  .rng output { text-align:right; color:var(--acc); font-variant-numeric: tabular-nums; }
+  .check { display:flex; gap:8px; align-items:center; margin:5px 0; color:#c7cbd3; }
+  button { background:var(--acc); color:#111; border:0; border-radius:7px; padding:9px 12px; font:600 13px Inter, sans-serif; cursor:pointer; width:100%; }
+  button.sec { background:#2a2f39; color:var(--text); }
+  button:disabled { opacity:.5; cursor:default; }
+  .btns { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; }
+  .addr { display:grid; grid-template-columns: 1fr 64px; gap:6px; margin-top:4px; }
+  .addr button { padding:6px 8px; }
+  #addrResults { display:flex; flex-direction:column; gap:3px; margin-top:4px; }
+  #addrResults button { text-align:left; background:#0f1115; color:var(--text); border:1px solid var(--line); font-weight:400; padding:6px 8px; }
+  #addrResults button:hover, #addrResults button.on { border-color:var(--acc); }
+  #addrResults button small { color:var(--mute); display:block; font-size:11px; }
+  .pal { display:grid; grid-template-columns: repeat(4, 1fr); gap:6px; margin:6px 0 10px; }
+  .pal label { display:flex; flex-direction:column; align-items:center; gap:3px; color:var(--mute); font-size:11px; }
+  .pal input[type=color] { width:100%; height:30px; border:1px solid var(--line); border-radius:6px; background:none; padding:0; }
+  .role { display:grid; grid-template-columns: 14px 1fr 70px; gap:8px; align-items:center; margin:5px 0; }
+  .role i { width:14px; height:14px; border-radius:4px; border:1px solid #0006; display:block; }
+  #status { margin-top:8px; color:var(--mute); min-height:18px; font-size:12px; }
+  #status.err { color:#ff7a6b; }
+  main { position:relative; }
+  #view { position:absolute; inset:0; }
+  #hud { position:absolute; left:14px; bottom:12px; background:rgba(17,19,23,.85); border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:12px; color:#c7cbd3; pointer-events:none; max-width:min(520px, calc(100% - 28px)); }
+  #hud b { color:var(--text); }
+  #tip { position:absolute; right:14px; top:12px; background:rgba(17,19,23,.85); border:1px solid var(--line); border-radius:8px; padding:7px 10px; font-size:12px; color:#c7cbd3; pointer-events:none; }
+  #busy { position:absolute; inset:0; display:none; align-items:center; justify-content:center; background:rgba(10,11,14,.55); font:600 15px Inter; text-align:center; padding:20px; }
+  #busy.on { display:flex; }
+  .attr { color:var(--mute); font-size:11px; margin-top:14px; }
+  .attr a { color:var(--mute); }
+  @media (max-width: 820px) { #app { grid-template-columns: 1fr; grid-template-rows: auto 60vh; height:auto; } aside { border-right:0; } main { height:60vh; } }
+</style>
+</head>
+<body>
+<div id="app">
+<aside>
+  <h1>Town <span>Maker</span></h1>
+  <div class="sub">Your street in 3D: buildings, roads and water on real terrain, as a multi-color 3MF.</div>
+  <div id="map"></div>
+  <div class="row full"><label>Address or place
+    <div class="addr"><input type="text" id="addr" placeholder="e.g. Hauptplatz 1, 8010 Graz" autocomplete="off"><button id="addrBtn" class="sec">Find</button></div></label>
+    <div id="addrResults"></div>
+    <label class="check"><input type="checkbox" id="addrLabel"> Use the found place as the label name</label></div>
+  <div class="row full"><label>Center (lat, lon) — or click the map
+    <input type="text" id="coords" value="47.07120, 15.43860"></label></div>
+  <div class="row"><label>Area width (m)<small>real distance across the print</small></label><input type="number" id="areaM" value="350" min="100" max="3000" step="50"></div>
+  <button id="fetchBtn">Load area</button>
+  <div id="status"></div>
+
+  <details open><summary>Print size</summary>
+    <div class="row"><label>Map width (mm)</label><input type="number" id="printW" value="160" min="40" max="260"></div>
+    <div class="row"><label>Map depth (mm)</label><input type="number" id="printD" value="180" min="40" max="260"></div>
+    <div class="row"><label>Bed size (mm)<small>used to center the model</small></label><input type="number" id="bed" value="270" min="100" max="600"></div>
+    <div class="row"><label>Mesh resolution (mm)<small>ground detail: roads, trees, roofs. Smaller = finer, bigger file</small></label><input type="number" id="pitch" value="0.3" min="0.2" max="1.5" step="0.05"></div>
+  </details>
+
+  <details open><summary>Buildings</summary>
+    <label class="check"><input type="checkbox" id="buildings" checked> Show buildings</label>
+    <div class="row"><label>Height scale</label><div class="rng"><input type="range" id="bex" min="1" max="4" step="0.1" value="1.5"><output></output></div></div>
+    <div class="row"><label>Height if unknown (m)</label><input type="number" id="defH" value="7" min="2" max="60" step="0.5"></div>
+    <div class="row"><label>Min. building height (mm)</label><input type="number" id="minBld" value="1.2" min="0.4" max="10" step="0.2"></div>
+    <div class="row"><label>Roof pitch<small>0 = all roofs flat</small></label><div class="rng"><input type="range" id="roofPitch" min="0" max="50" step="1" value="35"><output></output></div></div>
+    <div class="row"><label>Pitched roofs up to width (m)<small>wider buildings stay flat</small></label><input type="number" id="roofMaxW" value="24" min="4" max="80" step="1"></div>
+    <label class="check"><input type="checkbox" id="autoHouse" checked> Highlight the buildings at the searched address</label>
+    <label class="check"><input type="checkbox" id="outbuildings" checked> Include garages &amp; sheds on the same property</label>
+    <div class="hint">Click any building in the 3D view to highlight it or remove the highlight.</div>
+    <div class="btns" style="grid-template-columns:1fr"><button id="clearHi" class="sec">Clear highlights</button></div>
+  </details>
+
+  <details open><summary>Trees &amp; fields</summary>
+    <label class="check"><input type="checkbox" id="forest" checked> Forests (tree crowns)</label>
+    <label class="check"><input type="checkbox" id="parkTrees" checked> Trees in parks &amp; gardens</label>
+    <div class="row"><label>Tree height (m)</label><input type="number" id="treeH" value="12" min="3" max="40" step="1"></div>
+    <div class="row"><label>Crown size (m)</label><input type="number" id="crown" value="7" min="2" max="20" step="0.5"></div>
+    <div class="row"><label>Tree height scale</label><div class="rng"><input type="range" id="treeScale" min="0.3" max="2" step="0.1" value="1"><output></output></div></div>
+    <label class="check"><input type="checkbox" id="fields" checked> Plowed-field texture on farmland</label>
+    <div class="row"><label>Furrow depth (mm)</label><input type="number" id="grooveDepth" value="0.3" min="0.1" max="1" step="0.05"></div>
+    <div class="row"><label>Furrow spacing (mm)</label><input type="number" id="grooveSpacing" value="1.2" min="0.8" max="4" step="0.1"></div>
+  </details>
+
+  <details open><summary>Terrain, roads &amp; water</summary>
+    <div class="row"><label>Terrain exaggeration</label><div class="rng"><input type="range" id="vex" min="0" max="4" step="0.1" value="1.5"><output></output></div></div>
+    <div class="row"><label>Terrain smoothing</label><div class="rng"><input type="range" id="smooth" min="0" max="5" step="1" value="1"><output></output></div></div>
+    <div class="row"><label>Base thickness (mm)</label><input type="number" id="base" value="3" min="1" max="10" step="0.2"></div>
+    <div class="row"><label>Min. ground above base (mm)</label><input type="number" id="floor" value="1.5" min="0.6" max="10" step="0.2"></div>
+    <label class="check"><input type="checkbox" id="roads" checked> Roads</label>
+    <label class="check"><input type="checkbox" id="paths" checked> Footpaths &amp; tracks</label>
+    <label class="check"><input type="checkbox" id="rails" checked> Railways &amp; trams (raised)</label>
+    <div class="row"><label>Road width scale</label><div class="rng"><input type="range" id="roadScale" min="0.5" max="3" step="0.1" value="1"><output></output></div></div>
+    <div class="row"><label>Min. road width (mm)</label><input type="number" id="minRoad" value="0.8" min="0.3" max="4" step="0.1"></div>
+    <label class="check"><input type="checkbox" id="water" checked> Rivers &amp; lakes</label>
+    <label class="check"><input type="checkbox" id="streams"> Small streams</label>
+    <div class="row"><label>Inlay depth (mm)<small>roads and water</small></label><input type="number" id="carve" value="0.6" min="0.4" max="2" step="0.1"></div>
+  </details>
+
+  <details open><summary>Label strip</summary>
+    <div class="row full"><label>Name<input type="text" id="line1" value="GRAZ · HAUPTPLATZ"></label></div>
+    <div class="row full"><label>Second line <small>auto-filled with coordinates until you edit it</small><input type="text" id="line2" value=""></label></div>
+    <div class="row"><label>Strip depth (mm)<small>0 = no label</small></label><input type="number" id="strip" value="16" min="0" max="40" step="1"></div>
+    <div class="row"><label>Text height (mm)</label><input type="number" id="textH" value="0.6" min="0.2" max="3" step="0.2"></div>
+    <div class="row"><label>Text size</label><div class="rng"><input type="range" id="textScale" min="0.5" max="1.4" step="0.05" value="1"><output></output></div></div>
+  </details>
+
+  <details open><summary>Filaments &amp; tools</summary>
+    <div class="pal">
+      <label>T1<input type="color" id="col1" value="#f6c21c"></label>
+      <label>T2<input type="color" id="col2" value="#a3a6aa"></label>
+      <label>T3<input type="color" id="col3" value="#5fc3d6"></label>
+      <label>T4<input type="color" id="col4" value="#17181b"></label>
+    </div>
+    <div id="roles"></div>
+  </details>
+
+  <div class="btns"><button id="dl3mf" disabled>Download 3MF</button><button id="dlStl" class="sec" disabled>STLs (zip)</button></div>
+  <div id="exportInfo" class="sub" style="margin-top:8px"></div>
+  <div class="attr">Buildings, roads &amp; water: © <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors (heights from OSM tags, otherwise estimated). Elevation: <a href="https://registry.opendata.aws/terrain-tiles/" target="_blank">AWS Terrain Tiles</a>. Address search: Photon / Nominatim. Map tiles: Esri.</div>
+</aside>
+<main>
+  <div id="view"></div>
+  <div id="tip">Drag to rotate · scroll to zoom · click a building to highlight it</div>
+  <div id="hud">Search an address to start.</div>
+  <div id="busy">Working…</div>
+</main>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { zipSync } from 'fflate';
+
+// ===== CORE (pure functions, no DOM) =====
+const KM_LAT = 111.2;
+const kmLon = lat => 111.32 * Math.cos(lat * Math.PI / 180);
+
+// Growable typed arrays
+class U32 { constructor(n = 1 << 16) { this.a = new Uint32Array(n); this.n = 0; }
+  push3(x, y, z) { if (this.n + 3 > this.a.length) { const b = new Uint32Array(this.a.length * 2); b.set(this.a); this.a = b; } this.a[this.n++] = x; this.a[this.n++] = y; this.a[this.n++] = z; }
+  get arr() { return this.a.subarray(0, this.n); } }
+
+function geom(p) {
+  const scale = p.printW / p.areaKm;            // mm per km
+  const areaKmY = p.printD / scale;
+  return { scale, areaKmY };
+}
+
+// Build model grid (heights in mm, water mask) from a DEM sampler and a water rasterizer
+function computeModel(p, dem, waterRaster, pitch) {
+  const { scale, areaKmY } = geom(p);
+  const nx = Math.round(p.printW / pitch) + 1, ny = Math.round(p.printD / pitch) + 1;
+  const dx = p.printW / (nx - 1), dy = p.printD / (ny - 1);
+  const xs = new Float32Array(nx), ys = new Float32Array(ny);
+  for (let c = 0; c < nx; c++) xs[c] = c * dx;
+  for (let r = 0; r < ny; r++) ys[r] = r * dy;
+  const N = nx * ny, H = new Float32Array(N);
+  const kl = kmLon(p.lat);
+  for (let r = 0; r < ny; r++) {
+    const lat = p.lat + (ys[r] / scale - areaKmY / 2) / KM_LAT;
+    for (let c = 0; c < nx; c++) {
+      const lon = p.lon + (xs[c] / scale - p.areaKm / 2) / kl;
+      H[r * nx + c] = dem(lat, lon);
+    }
+  }
+  // smoothing: repeated 3x3 box blur
+  let A = H, B = new Float32Array(N);
+  for (let it = 0; it < p.smooth; it++) {
+    for (let r = 0; r < ny; r++) for (let c = 0; c < nx; c++) {
+      let s = 0, k = 0;
+      for (let j = -1; j <= 1; j++) { const rr = r + j; if (rr < 0 || rr >= ny) continue;
+        for (let i = -1; i <= 1; i++) { const cc = c + i; if (cc < 0 || cc >= nx) continue; s += A[rr * nx + cc]; k++; } }
+      B[r * nx + c] = s / k;
+    }
+    const t = A; A = B; B = t === H ? new Float32Array(N) : t;
+  }
+  const Hs = A;
+  let hmin = Infinity, hmax = -Infinity;
+  for (let i = 0; i < N; i++) { if (Hs[i] < hmin) hmin = Hs[i]; if (Hs[i] > hmax) hmax = Hs[i]; }
+  const VS = scale / 1000 * p.vex;              // mm per m
+  const z0 = p.base + p.floor;
+  const zof = e => z0 + (e - hmin) * VS;
+  const W = waterRaster ? waterRaster(nx, ny, pitch) : new Uint8Array(N);
+  const Zc = new Float32Array(N), TR = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    const z = zof(Hs[i]);
+    Zc[i] = z - (W[i] ? p.carve : 0);
+    TR[i] = W[i] ? Math.max(p.carve - p.recess, 0.2) : 0;
+  }
+  // contour sheets aligned to layer grid
+  const sheets = [];
+  const interval = p.interval;
+  let first = p.firstContour > 0 ? p.firstContour : Math.ceil((hmin + interval * 0.6) / interval) * interval;
+  const thick = p.sheetLayers * p.layer;
+  if (interval > 0 && p.sheetLayers > 0)
+    for (let e = first; e <= hmax; e += interval) {
+      const z = Math.round(zof(e) / p.layer) * p.layer;
+      if (z <= p.base + 1e-6) continue;
+      sheets.push([z, z + thick, e]);
+    }
+  let zmax = 0; for (let i = 0; i < N; i++) zmax = Math.max(zmax, Zc[i] + TR[i]);
+  return { nx, ny, xs, ys, Zc, TR, W, hmin, hmax, sheets, zmax, scale, areaKmY };
+}
+
+// Closed shell between two heightfields L<=U; zero-thickness vertices merged
+function hfBody(L, U, nx, ny, xs, ys) {
+  const N = nx * ny, act = new Uint8Array(N); let any = false;
+  for (let i = 0; i < N; i++) if (U[i] - L[i] > 1e-6) { act[i] = 1; any = true; }
+  if (!any) return null;
+  const bot = i => act[i] ? N + i : i;
+  const T = new U32();
+  for (let r = 0; r < ny - 1; r++) for (let c = 0; c < nx - 1; c++) {
+    const a = r * nx + c, b = a + 1, cc = a + nx + 1, d = a + nx;
+    if (act[a] | act[b] | act[cc]) { T.push3(a, b, cc); T.push3(bot(cc), bot(b), bot(a)); }
+    if (act[a] | act[cc] | act[d]) { T.push3(a, cc, d); T.push3(bot(d), bot(cc), bot(a)); }
+  }
+  const per = [];
+  for (let c = 0; c < nx; c++) per.push(c);
+  for (let r = 1; r < ny; r++) per.push(r * nx + nx - 1);
+  for (let c = nx - 2; c >= 0; c--) per.push((ny - 1) * nx + c);
+  for (let r = ny - 2; r >= 1; r--) per.push(r * nx);
+  for (let k = 0; k < per.length; k++) {
+    const p1 = per[k], p2 = per[(k + 1) % per.length];
+    if (!(act[p1] | act[p2])) continue;
+    const b1 = bot(p1), b2 = bot(p2);
+    if (b1 !== p1) T.push3(p2, p1, b1);
+    if (b2 !== p2) T.push3(p2, b1, b2);
+  }
+  const vz = i => i < N ? U[i] : L[i - N];
+  return compact(T.arr, i => { const j = i < N ? i : i - N; return [xs[j % nx], ys[(j / nx) | 0], vz(i)]; }, 2 * N);
+}
+
+function compact(F, pos, nv) {
+  const map = new Int32Array(nv).fill(-1); let n = 0;
+  const Fo = new Uint32Array(F.length);
+  for (let k = 0; k < F.length; k++) { let m = map[F[k]]; if (m < 0) { m = map[F[k]] = n++; } Fo[k] = m; }
+  const V = new Float32Array(n * 3);
+  for (let i = 0; i < nv; i++) { const m = map[i]; if (m >= 0) { const q = pos(i); V[m * 3] = q[0]; V[m * 3 + 1] = q[1]; V[m * 3 + 2] = q[2]; } }
+  return { V, F: Fo };
+}
+
+function boxBody(x0, x1, y0, y1, z0, z1) {
+  const V = new Float32Array([x0,y0,z0, x1,y0,z0, x1,y1,z0, x0,y1,z0, x0,y0,z1, x1,y0,z1, x1,y1,z1, x0,y1,z1]);
+  const F = new Uint32Array([0,2,1, 0,3,2, 4,5,6, 4,6,7, 0,1,5, 0,5,4, 1,2,6, 1,6,5, 2,3,7, 2,7,6, 3,0,4, 3,4,7]);
+  return { V, F };
+}
+
+// Ink mask M (Uint8Array ww*hh, row 0 = south) -> extruded pixel solid
+function pixelBody(M, ww, hh, px, x0, y0, z0, z1) {
+  const GW = ww + 1, No = GW * (hh + 1);
+  const ink = (r, c) => r >= 0 && r < hh && c >= 0 && c < ww && M[r * ww + c];
+  const T = new U32();
+  for (let r = 0; r < hh; r++) for (let c = 0; c < ww; c++) {
+    if (!M[r * ww + c]) continue;
+    const a = r * GW + c, b = a + 1, cc = a + GW + 1, d = a + GW;
+    T.push3(a, b, cc); T.push3(a, cc, d); T.push3(a + No, cc + No, b + No); T.push3(a + No, d + No, cc + No);
+    const edges = [[!ink(r - 1, c), a, b], [!ink(r, c + 1), b, cc], [!ink(r + 1, c), cc, d], [!ink(r, c - 1), d, a]];
+    for (const [e, p, q] of edges) if (e) { T.push3(p, p + No, q); T.push3(q, p + No, q + No); }
+  }
+  if (!T.n) return null;
+  return compact(T.arr, i => { const top = i < No; const j = top ? i : i - No; return [x0 + (j % GW) * px, y0 + ((j / GW) | 0) * px, top ? z1 : z0]; }, 2 * No);
+}
+
+function mergeBodies(list) {
+  list = list.filter(Boolean);
+  let nv = 0, nf = 0; for (const b of list) { nv += b.V.length; nf += b.F.length; }
+  const V = new Float32Array(nv), F = new Uint32Array(nf); let ov = 0, of = 0;
+  for (const b of list) { V.set(b.V, ov); for (let k = 0; k < b.F.length; k++) F[of + k] = b.F[k] + ov / 3; ov += b.V.length; of += b.F.length; }
+  return { V, F };
+}
+
+// Build the 4 printable bodies
+function buildBodies(p, m, textMask) {
+  const { nx, ny, xs, ys, Zc, TR, sheets } = m;
+  const N = nx * ny;
+  const levels = [p.base]; for (const s of sheets) levels.push(s[0], s[1]); levels.push(1e9);
+  const gray = [], yellow = [];
+  const L = new Float32Array(N), U = new Float32Array(N);
+  for (let k = 0; k < levels.length - 1; k++) {
+    const a = levels[k], b = levels[k + 1];
+    for (let i = 0; i < N; i++) { L[i] = Math.min(a, Zc[i]); U[i] = Math.min(b, Zc[i]); }
+    const body = hfBody(L, U, nx, ny, xs, ys);
+    if (body) (k % 2 ? yellow : gray).push(body);
+  }
+  const Ut = new Float32Array(N); for (let i = 0; i < N; i++) Ut[i] = Zc[i] + TR[i];
+  const water = hfBody(Zc, Ut, nx, ny, xs, ys);
+  const base = boxBody(0, p.printW, -p.strip, p.printD, 0, p.base);
+  const text = textMask ? pixelBody(textMask.M, textMask.w, textMask.h, textMask.px, 0, -p.strip, p.base, p.base + p.textH) : null;
+  return { base, gray: mergeBodies(gray), accent: mergeBodies([...yellow, text]), water: water };
+}
+
+function checkBody(b) {
+  const m = new Map(); const F = b.F;
+  for (let k = 0; k < F.length; k += 3) for (let e = 0; e < 3; e++) {
+    const u = F[k + e], v = F[k + (e + 1) % 3]; const key = u < v ? u * 4294967296 + v : v * 4294967296 + u;
+    m.set(key, (m.get(key) || 0) + 1);
+  }
+  let open = 0, nm = 0; for (const c of m.values()) { if (c === 1) open++; else if (c > 2) nm++; }
+  let vol = 0; const V = b.V;
+  for (let k = 0; k < F.length; k += 3) {
+    const a = F[k] * 3, bb = F[k + 1] * 3, c = F[k + 2] * 3;
+    vol += (V[a] * (V[bb + 1] * V[c + 2] - V[bb + 2] * V[c + 1]) - V[a + 1] * (V[bb] * V[c + 2] - V[bb + 2] * V[c]) + V[a + 2] * (V[bb] * V[c + 1] - V[bb + 1] * V[c])) / 6;
+  }
+  return { tris: F.length / 3, open, nm, vol };
+}
+
+// ---- writers ----
+const enc = new TextEncoder();
+function chunked(parts, n, fn, step = 20000) {
+  for (let i = 0; i < n; i += step) { let s = ''; const e = Math.min(n, i + step); for (let k = i; k < e; k++) s += fn(k); parts.push(enc.encode(s)); }
+}
+function concatU8(parts) { let n = 0; for (const p of parts) n += p.length; const o = new Uint8Array(n); let k = 0; for (const p of parts) { o.set(p, k); k += p.length; } return o; }
+const uuid = () => 'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/x/g, () => (Math.random() * 16 | 0).toString(16));
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+
+function build3MF(parts, p, title) {   // parts: [{name, body, tool}]
+  const NS = 'xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:BambuStudio="http://schemas.bambulab.com/package/2021" xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06" requiredextensions="p"';
+  const obj = [enc.encode(`<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" xml:lang="en-US" ${NS}>\n<metadata name="BambuStudio:3mfVersion">1</metadata>\n<resources>\n`)];
+  parts.forEach((pt, i) => {
+    const { V, F } = pt.body;
+    obj.push(enc.encode(`<object id="${i + 1}" p:UUID="${uuid()}" type="model"><mesh><vertices>\n`));
+    chunked(obj, V.length / 3, k => `<vertex x="${V[k * 3].toFixed(3)}" y="${V[k * 3 + 1].toFixed(3)}" z="${V[k * 3 + 2].toFixed(3)}"/>`);
+    obj.push(enc.encode('</vertices><triangles>\n'));
+    chunked(obj, F.length / 3, k => `<triangle v1="${F[k * 3]}" v2="${F[k * 3 + 1]}" v3="${F[k * 3 + 2]}"/>`);
+    obj.push(enc.encode('</triangles></mesh></object>\n'));
+  });
+  obj.push(enc.encode('</resources>\n<build/>\n</model>\n'));
+  const gid = parts.length + 1, I = '1 0 0 0 1 0 0 0 1 0 0 0';
+  const tx = (p.bed / 2 - p.printW / 2).toFixed(3), ty = (p.bed / 2 - (p.printD - p.strip) / 2).toFixed(3);
+  let main = `<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" xml:lang="en-US" ${NS}>\n<metadata name="Application">BambuStudio-01.10.02.76</metadata>\n<metadata name="BambuStudio:3mfVersion">1</metadata>\n<metadata name="Title">${esc(title)}</metadata>\n<resources>\n<object id="${gid}" p:UUID="${uuid()}" type="model"><components>\n`;
+  parts.forEach((pt, i) => { main += `<component p:path="/3D/Objects/object_1.model" objectid="${i + 1}" p:UUID="${uuid()}" transform="${I}"/>\n`; });
+  main += `</components></object>\n</resources>\n<build p:UUID="${uuid()}"><item objectid="${gid}" p:UUID="${uuid()}" transform="1 0 0 0 1 0 0 0 1 ${tx} ${ty} 0" printable="1"/></build>\n</model>\n`;
+  let cfg = `<?xml version="1.0" encoding="UTF-8"?>\n<config>\n  <object id="${gid}">\n    <metadata key="name" value="${esc(title)}"/>\n    <metadata key="extruder" value="${parts[1] ? parts[1].tool : 1}"/>\n`;
+  parts.forEach((pt, i) => { cfg += `    <part id="${i + 1}" subtype="normal_part">\n      <metadata key="name" value="${esc(pt.name)}"/>\n      <metadata key="matrix" value="1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"/>\n      <metadata key="extruder" value="${pt.tool}"/>\n    </part>\n`; });
+  cfg += `  </object>\n  <plate>\n    <metadata key="plater_id" value="1"/>\n    <metadata key="plater_name" value=""/>\n    <metadata key="locked" value="false"/>\n    <model_instance>\n      <metadata key="object_id" value="${gid}"/>\n      <metadata key="instance_id" value="0"/>\n      <metadata key="identify_id" value="1"/>\n    </model_instance>\n  </plate>\n  <assemble>\n   <assemble_item object_id="${gid}" instance_id="0" transform="1 0 0 0 1 0 0 0 1 ${tx} ${ty} 0" offset="0 0 0" />\n  </assemble>\n</config>\n`;
+  return {
+    '[Content_Types].xml': enc.encode('<?xml version="1.0" encoding="UTF-8"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/><Default Extension="png" ContentType="image/png"/></Types>'),
+    '_rels/.rels': enc.encode('<?xml version="1.0" encoding="UTF-8"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel-1" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>'),
+    '3D/_rels/3dmodel.model.rels': enc.encode('<?xml version="1.0" encoding="UTF-8"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/Objects/object_1.model" Id="rel-1" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>'),
+    '3D/3dmodel.model': enc.encode(main),
+    '3D/Objects/object_1.model': concatU8(obj),
+    'Metadata/model_settings.config': enc.encode(cfg),
+  };
+}
+
+function buildSTL(body, name) {
+  const { V, F } = body, n = F.length / 3;
+  const buf = new ArrayBuffer(84 + 50 * n), dv = new DataView(buf);
+  const hdr = enc.encode(('relief ' + name).slice(0, 79)); new Uint8Array(buf, 0, hdr.length).set(hdr);
+  dv.setUint32(80, n, true);
+  let o = 84;
+  for (let k = 0; k < n; k++) {
+    const a = F[k * 3] * 3, b = F[k * 3 + 1] * 3, c = F[k * 3 + 2] * 3;
+    const ux = V[b] - V[a], uy = V[b + 1] - V[a + 1], uz = V[b + 2] - V[a + 2];
+    const wx = V[c] - V[a], wy = V[c + 1] - V[a + 1], wz = V[c + 2] - V[a + 2];
+    let nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nz = ux * wy - uy * wx; const l = Math.hypot(nx, ny, nz) || 1;
+    dv.setFloat32(o, nx / l, true); dv.setFloat32(o + 4, ny / l, true); dv.setFloat32(o + 8, nz / l, true); o += 12;
+    for (const q of [a, b, c]) { dv.setFloat32(o, V[q], true); dv.setFloat32(o + 4, V[q + 1], true); dv.setFloat32(o + 8, V[q + 2], true); o += 12; }
+    o += 2;
+  }
+  return new Uint8Array(buf);
+}
+// ===== END CORE =====
+
+/* earcut — polygon triangulation. ISC License
+
+Copyright (c) 2026, Mapbox
+
+Permission to use, copy, modify, and/or distribute this software for any purpose
+with or without fee is hereby granted, provided that the above copyright notice
+and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
+FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
+OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
+TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+THIS SOFTWARE. */
+const earcut = (() => {
+/**
+ * A vertex in a circular doubly linked list representing a polygon ring.
+ * `prev`/`next` are always linked (set immediately after {@link createNode}), so they're typed
+ * non-null; `prevZ`/`nextZ` are the z-order list links and are null at the ends.
+ *
+ * @typedef {object} Node
+ * @property {number} i vertex index in the coordinates array
+ * @property {number} x vertex x coordinate
+ * @property {number} y vertex y coordinate
+ * @property {Node} prev previous vertex node in the polygon ring
+ * @property {Node} next next vertex node in the polygon ring
+ * @property {number} z z-order curve value; doubles as the owning block index during eliminateHoles
+ * @property {Node | null} prevZ previous node in z-order
+ * @property {Node | null} nextZ next node in z-order
+ */
+
+// single-vertex holes to preserve through filterPoints (steiner points); kept off the Node
+// shape since they're rare — the empty-set fast path means non-steiner inputs pay nothing
+/** @type {Set<Node>} */
+const steiners = new Set();
+
+// halves of split polygons waiting to be triangulated, drained by earcut in a loop so that the
+// call stack doesn't grow with the nesting depth of splits
+/** @type {Node[]} */
+const splitStack = [];
+
+// set by filterPoints whenever it removes at least one node; read by earcutLinked's stall
+// handler to decide whether another clip pass is worth attempting before the costlier stages
+let filteredOut = false;
+
+/**
+ * Triangulate a polygon given as a flat array of vertex coordinates.
+ *
+ * @param {ArrayLike<number>} data flat array of vertex coordinates
+ * @param {ArrayLike<number> | null} [holeIndices] indices (in vertices, not coordinates) where each hole ring starts
+ * @param {number} [dim=2] number of coordinates per vertex in `data`
+ * @returns {number[]} triangles as triplets of vertex indices into `data`
+ * @example earcut([10,0, 0,50, 60,60, 70,10]); // [1,0,3, 3,2,1]
+ */
+function earcut(data, holeIndices, dim = 2) {
+
+    const hasHoles = holeIndices && holeIndices.length;
+    const outerLen = hasHoles ? holeIndices[0] * dim : data.length;
+    if (steiners.size) steiners.clear();
+
+    let outerNode = linkedList(data, 0, outerLen, dim, true);
+    /** @type {number[]} */
+    const triangles = [];
+
+    if (!outerNode || outerNode.next === outerNode.prev) return triangles;
+
+    let minX = 0, minY = 0, invSize = 0;
+
+    if (hasHoles) outerNode = eliminateHoles(data, holeIndices, outerNode, dim);
+
+    // if the shape is not too simple, we'll use z-order curve hash later; calculate polygon bbox
+    if (data.length > 80 * dim) {
+        minX = data[0];
+        minY = data[1];
+        let maxX = minX;
+        let maxY = minY;
+
+        for (let i = dim; i < outerLen; i += dim) {
+            const x = data[i];
+            const y = data[i + 1];
+            if (x < minX) minX = x;
+            if (y < minY) minY = y;
+            if (x > maxX) maxX = x;
+            if (y > maxY) maxY = y;
+        }
+
+        // minX, minY and invSize are later used to transform coords into integers for z-order calculation
+        invSize = Math.max(maxX - minX, maxY - minY);
+        invSize = invSize !== 0 ? 32767 / invSize : 0;
+    }
+
+    earcutLinked(outerNode, triangles, minX, minY, invSize);
+    while (splitStack.length) earcutLinked(/** @type {Node} */ (splitStack.pop()), triangles, minX, minY, invSize);
+
+    return triangles;
+}
+
+// create a circular doubly linked list from polygon points in the specified winding order
+/** @param {ArrayLike<number>} data @param {number} start @param {number} end @param {number} dim @param {boolean} clockwise @returns {Node | null} */
+function linkedList(data, start, end, dim, clockwise) {
+    /** @type {Node | null} */
+    let last = null;
+
+    if (clockwise === (signedArea(data, start, end, dim) > 0)) {
+        for (let i = start; i < end; i += dim) last = insertNode(i / dim | 0, data[i], data[i + 1], last);
+    } else {
+        for (let i = end - dim; i >= start; i -= dim) last = insertNode(i / dim | 0, data[i], data[i + 1], last);
+    }
+
+    if (last && equals(last, last.next)) {
+        removeNode(last);
+        last = last.next;
+    }
+
+    return last;
+}
+
+// Remove collinear or coincident points; removability depends only on a node's immediate
+// neighbors, so we sweep forward and re-check the predecessor after each removal. With no `end`
+// we sweep the whole ring, lapping until nothing is removable (the fixpoint the clipper needs).
+// With an explicit `end` we heal only the dirty window around a bridge/diagonal cut, stopping at
+// `end` rather than lapping — O(window) instead of O(ring).
+/** @param {Node} start @param {Node} [end] @returns {Node} */
+function filterPoints(start, end = start) {
+    const full = end === start;
+
+    let p = start, again;
+    do {
+        again = false;
+        if (p !== p.next && (steiners.size === 0 || !steiners.has(p)) &&
+            (equals(p, p.next) || area(p.prev, p, p.next) === 0)) {
+            if (full || p === end) end = p.prev; // pull the stop bound back past the removal
+            filteredOut = true;
+            removeNode(p);
+            p = p.prev;         // re-check the predecessor
+            again = true;
+        } else if (full || p !== end) {
+            p = p.next;
+            again = !full;      // local heal: keep looping until the sweep reaches end
+        }
+    } while (again || p !== end);
+
+    return end;
+}
+
+// main ear slicing loop which triangulates a polygon (given as a linked list)
+/** @param {Node} ear @param {number[]} triangles @param {number} minX @param {number} minY @param {number} invSize */
+function earcutLinked(ear, triangles, minX, minY, invSize) {
+    // interlink polygon nodes in z-order
+    if (invSize) indexCurve(ear, minX, minY, invSize);
+
+    // a strictly convex ring has no vertex that could block an ear, so skip the point checks until a candidate fails;
+    // without this, a big convex ring is cut as one fan of long triangles and each hashed check scans O(n) points
+    let stop = ear, cured = false, convex = invSize ? isConvex(ear) : false;
+
+    // iterate through ears, slicing them one by one
+    while (ear.prev !== ear.next) {
+        const prev = ear.prev;
+        /** @type {Node} */
+        const next = ear.next;
+
+        if (area(prev, ear, next) < 0 && (convex || (invSize ? isEarHashed(ear, minX, minY, invSize) : isEar(ear)))) {
+            triangles.push(prev.i, ear.i, next.i); // cut off the triangle
+
+            removeNode(ear);
+            ear = next;
+            stop = next;
+            continue;
+        }
+
+        convex = false;
+        ear = next;
+
+        // if we looped through the whole remaining polygon and can't find any more ears
+        if (ear === stop) {
+            // try filtering collinear/coincident points and slicing again — repeat as long as
+            // filtering actually removes nodes, since each removal can expose new ears
+            filteredOut = false;
+            ear = filterPoints(ear);
+            if (filteredOut) { stop = ear; continue; }
+
+            // filtering is exhausted: cure small local self-intersections once, then retry
+            if (!cured) {
+                ear = cureLocalIntersections(ear, triangles);
+                stop = ear;
+                cured = true;
+                continue;
+            }
+
+            // as a last resort, try splitting the remaining polygon into two
+            splitEarcut(ear);
+            break;
+        }
+    }
+}
+
+// check whether every vertex of a ring is strictly convex
+/** @param {Node} start @returns {boolean} */
+function isConvex(start) {
+    let p = start;
+    do {
+        if (area(p.prev, p, p.next) >= 0) return false;
+        p = p.next;
+    } while (p !== start);
+    return true;
+}
+
+// check whether a polygon node forms a valid ear with adjacent nodes
+/** @param {Node} ear @returns {boolean} */
+function isEar(ear) {
+    // reflex check (area(a, b, c) >= 0) is hoisted into the earcutLinked caller to avoid non-inlined call here
+    const a = ear.prev, b = ear, c = ear.next,
+        ax = a.x, bx = b.x, cx = c.x, ay = a.y, by = b.y, cy = c.y,
+        x0 = Math.min(ax, bx, cx), // triangle bbox
+        y0 = Math.min(ay, by, cy),
+        x1 = Math.max(ax, bx, cx),
+        y1 = Math.max(ay, by, cy);
+
+    // make sure we don't have other points inside the potential ear
+    let p = c.next;
+    while (p !== a) {
+        if (p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1 && !(ax === p.x && ay === p.y) &&
+            pointInTriangle(ax, ay, bx, by, cx, cy, p.x, p.y) && area(p.prev, p, p.next) >= 0) return false;
+        p = p.next;
+    }
+    return true;
+}
+
+/** @param {Node} ear @param {number} minX @param {number} minY @param {number} invSize @returns {boolean} */
+function isEarHashed(ear, minX, minY, invSize) {
+    // reflex check is hoisted into the earcutLinked caller (see isEar)
+    const a = ear.prev, b = ear, c = ear.next,
+        ax = a.x, bx = b.x, cx = c.x, ay = a.y, by = b.y, cy = c.y,
+        x0 = Math.min(ax, bx, cx), // triangle bbox
+        y0 = Math.min(ay, by, cy),
+        x1 = Math.max(ax, bx, cx),
+        y1 = Math.max(ay, by, cy),
+        minZ = zOrder(x0, y0, minX, minY, invSize), // z-order range for the current triangle bbox;
+        maxZ = zOrder(x1, y1, minX, minY, invSize);
+
+    let p = ear.prevZ;
+    while (p && p.z >= minZ) { // look for points inside the triangle in decreasing z-order
+        if (p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1 && p !== c && !(ax === p.x && ay === p.y) &&
+            pointInTriangle(ax, ay, bx, by, cx, cy, p.x, p.y) && area(p.prev, p, p.next) >= 0) return false;
+        p = p.prevZ;
+    }
+    let n = ear.nextZ;
+    while (n && n.z <= maxZ) { // look for points in increasing z-order
+        if (n.x >= x0 && n.x <= x1 && n.y >= y0 && n.y <= y1 && n !== c && !(ax === n.x && ay === n.y) &&
+            pointInTriangle(ax, ay, bx, by, cx, cy, n.x, n.y) && area(n.prev, n, n.next) >= 0) return false;
+        n = n.nextZ;
+    }
+    return true;
+}
+
+// go through all polygon nodes and cure small local self-intersections
+/** @param {Node} start @param {number[]} triangles @returns {Node} */
+function cureLocalIntersections(start, triangles) {
+    let p = start;
+    let cured = false;
+    do {
+        const a = p.prev,
+            b = p.next.next;
+
+        if (intersects(a, p, p.next, b, false) && locallyInside(a, b) && locallyInside(b, a)) {
+
+            triangles.push(a.i, p.i, b.i);
+
+            // remove two nodes involved
+            removeNode(p);
+            removeNode(p.next);
+
+            p = start = b;
+            cured = true;
+        }
+        p = p.next;
+    } while (p !== start);
+
+    return cured ? filterPoints(p) : p;
+}
+
+// try splitting polygon into two and triangulate them independently
+/** @param {Node} start */
+function splitEarcut(start) {
+    // look for a valid diagonal that divides the polygon into two
+    let a = start;
+    do {
+        let b = a.next.next;
+        while (b !== a.prev) {
+            if (a.i !== b.i && isValidDiagonal(a, b)) {
+                // split the polygon in two by the diagonal
+                let c = splitPolygon(a, b);
+
+                // filter colinear points around the cuts
+                a = filterPoints(a, a.next);
+                c = filterPoints(c, c.next);
+
+                // queue both halves for earcut, a on top so it's triangulated first
+                splitStack.push(c, a);
+                return;
+            }
+            b = b.next;
+        }
+        a = a.next;
+    } while (a !== start);
+}
+
+// true only while eliminateHoles merges holes, so removeNode keeps the block index live (growBlock)
+let indexActive = false;
+
+// link every hole into the outer loop, producing a single-ring polygon without holes
+/** @param {ArrayLike<number>} data @param {ArrayLike<number>} holeIndices @param {Node} outerNode @param {number} dim @returns {Node} */
+function eliminateHoles(data, holeIndices, outerNode, dim) {
+    const queue = [];
+
+    for (let i = 0, len = holeIndices.length; i < len; i++) {
+        const start = holeIndices[i] * dim;
+        const end = i < len - 1 ? holeIndices[i + 1] * dim : data.length;
+        const list = /** @type {Node} */ (linkedList(data, start, end, dim, false));
+        if (list === list.next) steiners.add(list);
+        queue.push(getLeftmost(list));
+    }
+
+    queue.sort(compareXYSlope);
+
+    // block-bbox index for findHoleBridge, grown append-only as holes merge (see notes
+    // above buildBlockIndex). Seed it with the outer ring, then append each merged hole.
+    buildBlockIndex(data.length / dim, holeIndices.length);
+    indexSegment(outerNode, outerNode);
+
+    // process holes from left to right; indexActive lets removeNode keep block bboxes live as
+    // filterPoints heals edges during merges (see growBlock)
+    indexActive = true;
+    for (let i = 0; i < queue.length; i++) {
+        outerNode = eliminateHole(queue[i], outerNode);
+    }
+    indexActive = false;
+
+    // collapse collinear/coincident points across the whole merged ring once before clipping
+    return filterPoints(outerNode);
+}
+
+/** @param {Node} a @param {Node} b @returns {number} */
+function compareXYSlope(a, b) {
+    // when the left-most point of 2 holes meet at a vertex, sort the holes counterclockwise so that when we find
+    // the bridge to the outer shell is always the point that they meet at.
+    return a.x - b.x || a.y - b.y ||
+        (a.next.y - a.y) / (a.next.x - a.x) -
+        (b.next.y - b.y) / (b.next.x - b.x);
+}
+
+// find a bridge between vertices that connects hole with an outer ring and link it
+/** @param {Node} hole @param {Node} outerNode @returns {Node} */
+function eliminateHole(hole, outerNode) {
+    const bridge = findHoleBridge(hole, outerNode);
+    if (!bridge) {
+        return outerNode;
+    }
+
+    const bridgeReverse = splitPolygon(bridge, hole);
+
+    // index the merged-in segment before filtering: in ring order the splice runs
+    // bridge -> hole -> bridgeReverse -> bridge2 -> (bridge's old next), covering the
+    // hole's edges and both new slit edges. filterPoints below only drops collinear /
+    // coincident points, so these bboxes stay valid (conservative) supersets.
+    const bridge2 = bridgeReverse.next;
+    indexSegment(bridge, bridge2.next);
+
+    // heal collinear/coincident points around the two new slit edges, but leave bridge2 alone: dropping it as collinear
+    // would leave bridge lying on the healed edge, where a later hole could bridge into it from outside its sector
+    filterPoints(bridgeReverse.prev, bridgeReverse);
+
+    // likewise, if bridge lies strictly between its prev and hole, healing would drop it and leave bridge2 on the healed
+    // edge; skip the heal then (a spike at bridge, e.g. a hole touching an outer edge, still needs it)
+    const a = bridge.prev;
+    if (area(a, bridge, hole) === 0 && (a.x - bridge.x) * (hole.x - bridge.x) + (a.y - bridge.y) * (hole.y - bridge.y) < 0) return bridge;
+
+    return filterPoints(bridge, bridge.next);
+}
+
+// Block-bbox index for findHoleBridge (issue #183): one [minX,minY,maxX,maxY] bbox per K
+// consecutive ring edges, in a flat Float64Array, so the leftward-ray scan can skip whole
+// blocks in O(1) instead of walking the entire merged ring. Grown append-only — the outer
+// ring seeds it, then each merged hole appends a segment (head node, stop node, K-blocks
+// over head..stop); independent segments, not a ring tiling, since splices land mid-ring.
+// Buffers are sized once from the input upper bound and reused across calls.
+//
+// filterPoints only drops collinear/coincident points, so a stale bbox stays a conservative
+// superset of its live edges (never a false skip); the scan skips dead nodes (p.prev.next !==
+// p) and lazily advances a dead stop. Blocks are scanned in append (not ring) order, so the
+// chosen bridge can differ from the un-indexed code — a different but equally valid result.
+const K = 16; // edges per block
+
+let blockBBox = new Float64Array(0); // [minX,minY,maxX,maxY] per block
+let numBlocks = 0;
+/** @type {Node[]} */
+const blockHead = []; // first node of each block's segment
+/** @type {Node[]} */
+const blockStop = []; // node just past each block's segment (exclusive walk bound)
+
+/** @param {number} maxNodes @param {number} numHoles */
+function buildBlockIndex(maxNodes, numHoles) {
+    // upper bound: every input node indexed once, +2 bridge nodes per hole, plus a partial
+    // trailing block per appended segment (outer ring + one per hole)
+    const maxBlocks = Math.ceil((maxNodes + 2 * numHoles) / K) + numHoles + 2;
+    if (blockBBox.length < maxBlocks * 4) blockBBox = new Float64Array(maxBlocks * 4);
+    numBlocks = 0;
+}
+
+// index the ring run head..stop (exclusive) as ceil(len / K) blocks; head === stop means
+// the whole ring. each block's bbox covers both endpoints of every edge it owns.
+/** @param {Node} head @param {Node} stop */
+function indexSegment(head, stop) {
+    let p = head;
+    do {
+        const b = numBlocks++;
+        blockHead[b] = p;
+        let minX = p.x, minY = p.y, maxX = p.x, maxY = p.y;
+        let k = 0;
+        do {
+            const c = p.next; // edge p->c; bbox must bound both endpoints
+            p.z = b; // reuse z as the owning block during eliminateHoles (see growBlock)
+            if (c.x < minX) minX = c.x; if (c.x > maxX) maxX = c.x;
+            if (c.y < minY) minY = c.y; if (c.y > maxY) maxY = c.y;
+            p = c;
+        } while (++k < K && p !== stop);
+        blockStop[b] = p;
+        const g = b * 4;
+        blockBBox[g] = minX; blockBBox[g + 1] = minY; blockBBox[g + 2] = maxX; blockBBox[g + 3] = maxY;
+    } while (p !== stop);
+}
+
+// when filterPoints heals an edge head->tail (removing the collinear node between them), the
+// healed edge can extend past head's frozen block bbox if its old far endpoint lived in another
+// block; grow head's block bbox to cover tail so the leftward-ray prune can't false-skip it.
+/** @param {Node} head @param {Node} tail */
+function growBlock(head, tail) {
+    const g = head.z * 4;
+    if (tail.x < blockBBox[g]) blockBBox[g] = tail.x;
+    if (tail.y < blockBBox[g + 1]) blockBBox[g + 1] = tail.y;
+    if (tail.x > blockBBox[g + 2]) blockBBox[g + 2] = tail.x;
+    if (tail.y > blockBBox[g + 3]) blockBBox[g + 3] = tail.y;
+}
+
+/** @param {number} b @returns {Node} */
+function liveBlockStop(b) {
+    let stop = blockStop[b];
+    while (stop.prev.next !== stop) stop = stop.next;
+    blockStop[b] = stop;
+    return stop;
+}
+
+// the block's head node can be removed by filterPoints during merges; advance it to the next
+// live node so the walk doesn't start on (and immediately terminate at) a dead node. For the
+// single full-ring seed block (head === stop) the same forward advance keeps them equal, so the
+// do-while still laps the whole ring instead of collapsing to an empty walk.
+/** @param {number} b @returns {Node} */
+function liveBlockHead(b) {
+    let head = blockHead[b];
+    while (head.prev.next !== head) head = head.next;
+    blockHead[b] = head;
+    return head;
+}
+
+// David Eberly's algorithm for finding a bridge between hole and outer polygon
+/** @param {Node} hole @param {Node} outerNode @returns {Node | null} */
+function findHoleBridge(hole, outerNode) {
+    let p = outerNode;
+    const hx = hole.x;
+    const hy = hole.y;
+    let qx = -Infinity;
+    /** @type {Node | undefined} */
+    let m;
+
+    // find a segment intersected by a ray from the hole's leftmost point to the left;
+    // segment's endpoint with lesser x will be potential connection point
+    // unless they intersect at a vertex, then choose the vertex
+    if (equals(hole, p)) return p;
+
+    // scan blocks; skip any whose bbox can't hold a crossing that beats qx and lies left
+    // of hx (the prune Morton order can't express — explicit per-axis [minY,maxY]/[minX,maxX])
+    for (let b = 0, g = 0; b < numBlocks; b++, g += 4) {
+        if (hy < blockBBox[g + 1] || hy > blockBBox[g + 3] || blockBBox[g] > hx || blockBBox[g + 2] <= qx) continue;
+
+        // ensure the walk's exclusive bound is live so we don't overrun into other blocks
+        const stop = liveBlockStop(b);
+
+        p = liveBlockHead(b);
+        do {
+            if (equals(hole, p.next)) return p.next;
+            else if (hy <= p.y && hy >= p.next.y && p.next.y !== p.y) {
+                const x = p.x + (hy - p.y) * (p.next.x - p.x) / (p.next.y - p.y);
+                if (x <= hx && x > qx) {
+                    qx = x;
+                    m = p.x < p.next.x ? p : p.next;
+                    if (x === hx) return m; // hole touches outer segment; pick leftmost endpoint
+                }
+            }
+            p = p.next;
+        } while (p !== stop);
+    }
+
+    if (!m) return null;
+
+    // look for points inside the triangle of hole point, segment intersection and endpoint;
+    // if there are no points found, we have a valid connection;
+    // otherwise choose the point of the minimum angle with the ray as connection point
+
+    const mx = m.x;
+    const my = m.y;
+    const tminY = Math.min(hy, my); // the triangle's y span; x span is [mx, hx]
+    const tmaxY = Math.max(hy, my);
+    let tanMin = Infinity;
+
+    // scan the same blocks; skip any whose bbox can't overlap the triangle's [mx,hx]×[tminY,tmaxY] box
+    for (let b = 0, g = 0; b < numBlocks; b++, g += 4) {
+        if (blockBBox[g + 2] < mx || blockBBox[g] > hx || blockBBox[g + 3] < tminY || blockBBox[g + 1] > tmaxY) continue;
+
+        const stop = liveBlockStop(b);
+
+        p = liveBlockHead(b);
+        do {
+            if (hx >= p.x && p.x >= mx && hx !== p.x &&
+                    pointInTriangle(hy < my ? hx : qx, hy, mx, my, hy < my ? qx : hx, hy, p.x, p.y)) {
+
+                const tan = Math.abs(hy - p.y) / (hx - p.x); // tangential
+
+                // if hole point sits on p's horizontal edge (T-junction touch): the bridge runs
+                // along that edge — locallyInside rejects it as collinear, but it's valid
+                if ((locallyInside(p, hole) || (p.y === hy && p.next.y === hy && p.next.x > hx)) &&
+                    (tan < tanMin || (tan === tanMin && (p.x > m.x || (p.x === m.x && sectorContainsSector(m, p)))))) {
+                    m = p;
+                    tanMin = tan;
+                }
+            }
+
+            p = p.next;
+        } while (p !== stop);
+    }
+
+    return m;
+}
+
+// whether sector in vertex m contains sector in vertex p in the same coordinates
+/** @param {Node} m @param {Node} p @returns {boolean} */
+function sectorContainsSector(m, p) {
+    return area(m.prev, m, p.prev) < 0 && area(p.next, m, m.next) < 0;
+}
+
+// scratch buffers reused across calls and grown on demand: two node-ref arrays that
+// ping-pong during the radix passes, plus parallel z-value arrays so the passes read
+// z from contiguous memory instead of dereferencing each node. 256-entry histogram for
+// 8-bit digits; the small histogram keeps per-call setup cheap (most rings are short)
+/** @type {Node[]} */
+const sortArr = [];
+/** @type {Node[]} */
+let sortBuf = [];
+let zArr = new Uint32Array(0);
+let zBuf = new Uint32Array(0);
+const counts = new Uint32Array(256);
+
+// interlink polygon nodes in z-order: collect into an array, sort by z, relink
+/** @param {Node} start @param {number} minX @param {number} minY @param {number} invSize */
+function indexCurve(start, minX, minY, invSize) {
+    let p = start;
+    let n = 0;
+    do {
+        // always (re)compute: z may still hold a block index left over from eliminateHoles
+        p.z = zOrder(p.x, p.y, minX, minY, invSize);
+        sortArr[n++] = p;
+        p = p.next;
+    } while (p !== start);
+
+    sortNodes(n);
+
+    /** @type {Node | null} */
+    let prev = null;
+    for (let i = 0; i < n; i++) {
+        const node = sortArr[i];
+        node.prevZ = prev;
+        if (prev) prev.nextZ = node;
+        prev = node;
+    }
+    /** @type {Node} */ (prev).nextZ = null;
+
+    // drop the node refs but keep the capacity: setting length to 0 leaves sortBuf unresized
+    // (its growth is gated on zArr), so the radix scatter regrows it out of order every call
+    sortArr.fill(/** @type {Node} */ (/** @type {unknown} */ (null)), 0, n);
+    sortBuf.fill(/** @type {Node} */ (/** @type {unknown} */ (null)), 0, n);
+}
+
+// sort the first n nodes of sortArr by z, in place: insertion sort for small n (cheaper
+// than histogram setup), else LSD radix in four 8-bit passes (covering z's 30 bits)
+/** @param {number} n */
+function sortNodes(n) {
+    if (n <= 32) {
+        for (let i = 1; i < n; i++) {
+            const node = sortArr[i], z = node.z;
+            let j = i - 1;
+            while (j >= 0 && sortArr[j].z > z) { sortArr[j + 1] = sortArr[j]; j--; }
+            sortArr[j + 1] = node;
+        }
+        return;
+    }
+
+    if (zArr.length < n) {
+        zArr = new Uint32Array(n);
+        zBuf = new Uint32Array(n);
+        sortBuf = new Array(n);
+    }
+    for (let i = 0; i < n; i++) zArr[i] = sortArr[i].z;
+
+    // even pass count lands the sorted result back in sortArr
+    radixPass(n, sortArr, zArr, sortBuf, zBuf, 0);
+    radixPass(n, sortBuf, zBuf, sortArr, zArr, 8);
+    radixPass(n, sortArr, zArr, sortBuf, zBuf, 16);
+    radixPass(n, sortBuf, zBuf, sortArr, zArr, 24);
+}
+
+// one LSD radix pass: stably scatter the first n nodes (and their z) from src to dst,
+// bucketed by the 8-bit digit of z at the given bit shift
+/** @param {number} n @param {Node[]} src @param {Uint32Array} srcZ @param {Node[]} dst @param {Uint32Array} dstZ @param {number} shift */
+function radixPass(n, src, srcZ, dst, dstZ, shift) {
+    counts.fill(0);
+    for (let i = 0; i < n; i++) counts[(srcZ[i] >>> shift) & 0xff]++;
+    // turn per-bucket counts into start offsets (prefix sum)
+    let sum = 0;
+    for (let b = 0; b < 256; b++) { const c = counts[b]; counts[b] = sum; sum += c; }
+    for (let i = 0; i < n; i++) {
+        const z = srcZ[i];
+        const pos = counts[(z >>> shift) & 0xff]++;
+        dst[pos] = src[i];
+        dstZ[pos] = z;
+    }
+}
+
+// z-order of a point given coords and inverse of the longer side of data bbox
+/** @param {number} x @param {number} y @param {number} minX @param {number} minY @param {number} invSize @returns {number} */
+function zOrder(x, y, minX, minY, invSize) {
+    // coords are transformed into non-negative 15-bit integer range
+    x = (x - minX) * invSize | 0;
+    y = (y - minY) * invSize | 0;
+
+    x = (x | (x << 8)) & 0x00FF00FF;
+    x = (x | (x << 4)) & 0x0F0F0F0F;
+    x = (x | (x << 2)) & 0x33333333;
+    x = (x | (x << 1)) & 0x55555555;
+
+    y = (y | (y << 8)) & 0x00FF00FF;
+    y = (y | (y << 4)) & 0x0F0F0F0F;
+    y = (y | (y << 2)) & 0x33333333;
+    y = (y | (y << 1)) & 0x55555555;
+
+    return x | (y << 1);
+}
+
+// find the leftmost node of a polygon ring
+/** @param {Node} start @returns {Node} */
+function getLeftmost(start) {
+    let p = start,
+        leftmost = start;
+    do {
+        if (p.x < leftmost.x || (p.x === leftmost.x && p.y < leftmost.y)) leftmost = p;
+        p = p.next;
+    } while (p !== start);
+
+    return leftmost;
+}
+
+// check if a point lies within a convex triangle
+/** @param {number} ax @param {number} ay @param {number} bx @param {number} by @param {number} cx @param {number} cy @param {number} px @param {number} py @returns {boolean} */
+function pointInTriangle(ax, ay, bx, by, cx, cy, px, py) {
+    return (cx - px) * (ay - py) >= (ax - px) * (cy - py) &&
+           (ax - px) * (by - py) >= (bx - px) * (ay - py) &&
+           (bx - px) * (cy - py) >= (cx - px) * (by - py);
+}
+
+// check if a diagonal between two polygon nodes is valid (lies in polygon interior)
+/** @param {Node} a @param {Node} b @returns {boolean} true when the diagonal is valid */
+function isValidDiagonal(a, b) {
+    const zeroLength = equals(a, b) && area(a.prev, a, a.next) > 0 && area(b.prev, b, b.next) > 0; // degenerate case
+    return a.next.i !== b.i && (zeroLength || locallyInside(a, b) && locallyInside(b, a) && // // locally visible
+        (area(a.prev, a, b.prev) !== 0 || area(a, b.prev, b) !== 0)) && // no opposite-facing sectors
+        !intersectsPolygon(a, b) && (zeroLength || middleInside(a, b)); // doesn't intersect other edges, diagonal inside polygon
+}
+
+// signed area of a triangle
+/** @param {Node} p @param {Node} q @param {Node} r @returns {number} */
+function area(p, q, r) {
+    return (q.y - p.y) * (r.x - q.x) - (q.x - p.x) * (r.y - q.y);
+}
+
+// check if two points are equal
+/** @param {Node} p1 @param {Node} p2 @returns {boolean} */
+function equals(p1, p2) {
+    return p1.x === p2.x && p1.y === p2.y;
+}
+
+// check if two segments intersect; by default includes collinear boundary touches
+/** @param {Node} p1 @param {Node} q1 @param {Node} p2 @param {Node} q2 @param {boolean} [includeBoundary] @returns {boolean} */
+function intersects(p1, q1, p2, q2, includeBoundary = true) {
+    const o1 = area(p1, q1, p2);
+    const o2 = area(p1, q1, q2);
+    const o3 = area(p2, q2, p1);
+    const o4 = area(p2, q2, q1);
+
+    if (((o1 > 0 && o2 < 0) || (o1 < 0 && o2 > 0)) && ((o3 > 0 && o4 < 0) || (o3 < 0 && o4 > 0))) return true;
+
+    if (!includeBoundary) return false;
+
+    if (o1 === 0 && onSegment(p1, p2, q1)) return true; // p1, q1 and p2 are collinear and p2 lies on p1q1
+    if (o2 === 0 && onSegment(p1, q2, q1)) return true; // p1, q1 and q2 are collinear and q2 lies on p1q1
+    if (o3 === 0 && onSegment(p2, p1, q2)) return true; // p2, q2 and p1 are collinear and p1 lies on p2q2
+    if (o4 === 0 && onSegment(p2, q1, q2)) return true; // p2, q2 and q1 are collinear and q1 lies on p2q2
+
+    return false;
+}
+
+// for collinear points p, q, r, check if point q lies on segment pr
+/** @param {Node} p @param {Node} q @param {Node} r @returns {boolean} */
+function onSegment(p, q, r) {
+    return q.x <= Math.max(p.x, r.x) && q.x >= Math.min(p.x, r.x) && q.y <= Math.max(p.y, r.y) && q.y >= Math.min(p.y, r.y);
+}
+
+// check if a polygon diagonal intersects any polygon segments
+/** @param {Node} a @param {Node} b @returns {boolean} */
+function intersectsPolygon(a, b) {
+    // diagonal bbox; an edge whose bbox can't overlap it can't intersect it, so
+    // skip the orientation test for those (the common case — the diagonal is short)
+    const minX = Math.min(a.x, b.x);
+    const maxX = Math.max(a.x, b.x);
+    const minY = Math.min(a.y, b.y);
+    const maxY = Math.max(a.y, b.y);
+
+    let p = a;
+    do {
+        const n = p.next;
+        if ((p.x > maxX && n.x > maxX) || (p.x < minX && n.x < minX) ||
+            (p.y > maxY && n.y > maxY) || (p.y < minY && n.y < minY)) {
+            p = n;
+            continue;
+        }
+        if (p.i !== a.i && n.i !== a.i && p.i !== b.i && n.i !== b.i &&
+                intersects(p, n, a, b)) return true;
+        p = n;
+    } while (p !== a);
+
+    return false;
+}
+
+// check if a polygon diagonal is locally inside the polygon
+/** @param {Node} a @param {Node} b @returns {boolean} */
+function locallyInside(a, b) {
+    return area(a.prev, a, a.next) < 0 ?
+        area(a, b, a.next) >= 0 && area(a, a.prev, b) >= 0 :
+        area(a, b, a.prev) < 0 || area(a, a.next, b) < 0;
+}
+
+// check if the middle point of a polygon diagonal is inside the polygon
+/** @param {Node} a @param {Node} b @returns {boolean} */
+function middleInside(a, b) {
+    let p = a;
+    let inside = false;
+    const px = (a.x + b.x) / 2;
+    const py = (a.y + b.y) / 2;
+    do {
+        const n = p.next;
+        if (((p.y > py) !== (n.y > py)) && (px < (n.x - p.x) * (py - p.y) / (n.y - p.y) + p.x))
+            inside = !inside;
+        p = n;
+    } while (p !== a);
+
+    return inside;
+}
+
+// link two polygon vertices with a bridge; if the vertices belong to the same ring, it splits polygon into two;
+// if one belongs to the outer ring and another to a hole, it merges it into a single ring
+/** @param {Node} a @param {Node} b @returns {Node} */
+function splitPolygon(a, b) {
+    const a2 = createNode(a.i, a.x, a.y),
+        b2 = createNode(b.i, b.x, b.y),
+        an = a.next,
+        bp = b.prev;
+
+    a.next = b;
+    b.prev = a;
+
+    a2.next = an;
+    an.prev = a2;
+
+    b2.next = a2;
+    a2.prev = b2;
+
+    bp.next = b2;
+    b2.prev = bp;
+
+    return b2;
+}
+
+// create a node and optionally link it with previous one (in a circular doubly linked list)
+/** @param {number} i @param {number} x @param {number} y @param {Node | null} last @returns {Node} */
+function insertNode(i, x, y, last) {
+    const p = createNode(i, x, y);
+
+    if (!last) {
+        p.prev = p;
+        p.next = p;
+
+    } else {
+        p.next = last.next;
+        p.prev = last;
+        last.next.prev = p;
+        last.next = p;
+    }
+    return p;
+}
+
+/** @param {Node} p */
+function removeNode(p) {
+    p.next.prev = p.prev;
+    p.prev.next = p.next;
+
+    if (p.prevZ) p.prevZ.nextZ = p.nextZ;
+    if (p.nextZ) p.nextZ.prevZ = p.prevZ;
+
+    // keep the hole-bridge index's block bboxes covering the healed prev->next edge
+    if (indexActive) growBlock(p.prev, p.next);
+}
+
+/** @param {number} i @param {number} x @param {number} y @returns {Node} */
+function createNode(i, x, y) {
+    // prev/next are assigned by the caller before any read, so the null init is cast away here
+    return /** @type {Node} */ (/** @type {unknown} */ ({
+        i, // vertex index in coordinates array
+        x, y, // vertex coordinates
+        prev: null, // previous and next vertex nodes in a polygon ring
+        next: null,
+        z: 0, // z-order curve value; doubles as owning block in the hole-bridge index during eliminateHoles
+        prevZ: null, // previous and next nodes in z-order
+        nextZ: null
+    }));
+}
+
+/**
+ * Return the relative difference between the polygon area and the area of its triangulation —
+ * a value near 0 means a correct triangulation. Useful for verifying output in tests.
+ *
+ * @param {ArrayLike<number>} data
+ * @param {ArrayLike<number> | null} holeIndices
+ * @param {number} dim number of coordinates per vertex in `data`
+ * @param {ArrayLike<number>} triangles output of {@link earcut}
+ * @returns {number}
+ * @example deviation(data, holes, dim, earcut(data, holes, dim)); // ~0 if correct
+ */
+function deviation(data, holeIndices, dim, triangles) {
+    const hasHoles = holeIndices && holeIndices.length;
+    const outerLen = hasHoles ? holeIndices[0] * dim : data.length;
+
+    let polygonArea = Math.abs(signedArea(data, 0, outerLen, dim));
+    if (hasHoles) {
+        for (let i = 0, len = holeIndices.length; i < len; i++) {
+            const start = holeIndices[i] * dim;
+            const end = i < len - 1 ? holeIndices[i + 1] * dim : data.length;
+            polygonArea -= Math.abs(signedArea(data, start, end, dim));
+        }
+    }
+
+    let trianglesArea = 0;
+    for (let i = 0; i < triangles.length; i += 3) {
+        const a = triangles[i] * dim;
+        const b = triangles[i + 1] * dim;
+        const c = triangles[i + 2] * dim;
+        trianglesArea += Math.abs(
+            (data[a] - data[c]) * (data[b + 1] - data[a + 1]) -
+            (data[a] - data[b]) * (data[c + 1] - data[a + 1]));
+    }
+
+    // with no triangles, a polygon area within shoelace roundoff of zero (which scales with the
+    // squared coordinate magnitude) means the input was degenerate rather than mistriangulated
+    if (trianglesArea === 0) {
+        let max = 0;
+        for (let i = 0; i < data.length; i += dim) max = Math.max(max, Math.abs(data[i]), Math.abs(data[i + 1]));
+        return Math.abs(polygonArea) <= data.length * max * max * Number.EPSILON ? 0 : 1;
+    }
+    return Math.abs((trianglesArea - polygonArea) / polygonArea);
+}
+
+/** @param {ArrayLike<number>} data @param {number} start @param {number} end @param {number} dim @returns {number} */
+function signedArea(data, start, end, dim) {
+    let sum = 0;
+    for (let i = start, j = end - dim; i < end; i += dim) {
+        sum += (data[j] - data[i]) * (data[i + 1] + data[j + 1]);
+        j = i;
+    }
+    return sum;
+}
+
+/**
+ * Turn a polygon in multi-dimensional array form (e.g. as in GeoJSON) into the flat form Earcut accepts.
+ *
+ * @param {ReadonlyArray<ReadonlyArray<ArrayLike<number>>>} data array of rings; the first ring is the outer contour, the rest are holes
+ * @returns {{vertices: number[], holes: number[], dimensions: number}}
+ * @example const {vertices, holes, dimensions} = flatten(geojson.coordinates);
+ */
+function flatten(data) {
+    const vertices = [];
+    const holes = [];
+    const dimensions = data[0][0].length;
+    let holeIndex = 0;
+
+    for (const ring of data) {
+        for (const p of ring) {
+            for (let d = 0; d < dimensions; d++) vertices.push(p[d]);
+        }
+        if (holeIndex && ring.length) holes.push(holeIndex);
+        holeIndex += ring.length;
+    }
+    return {vertices, holes, dimensions};
+}
+
+// Reusable module-level scratch for refine():
+//   he      = twin half-edge of each edge, or -1 on the polygon boundary
+//   hTable  = open-addressing hash, slot -> half-edge index, valid iff hStamp[slot] === gen
+//   edgeStamp = pending-in-stack flag, cleared when the edge is popped
+/** @type {Int32Array} */ let edgeStack;
+/** @type {Int32Array} */ let he;
+/** @type {Int32Array} */ let hTable;
+/** @type {Uint32Array} */ let hStamp;
+/** @type {Uint8Array} */ let edgeStamp;
+let hMask = 0, gen = 0;
+
+/**
+ * Refine a triangulation toward the constrained Delaunay triangulation by legalizing every
+ * interior edge in place with Lawson flips — maximizing the minimum angle and removing most
+ * slivers. An optional post-pass for {@link earcut} output, or any manifold triangle-index array
+ * indexing into `coords`. Adapted from delaunator's edge legalization.
+ *
+ * Uses non-robust predicates: float input is fine, and the worst case is a not-quite-Delaunay
+ * edge, never an invalid mesh.
+ *
+ * @param {number[]} triangles triangle indices, as returned by {@link earcut}; mutated in place
+ * @param {ArrayLike<number>} coords the flat vertex coordinates passed to {@link earcut}
+ * @param {number} [dim=2] number of coordinates per vertex in `coords`
+ * @example refine(earcut(data), data);
+ */
+function refine(triangles, coords, dim = 2) {
+    const t = triangles;
+    const n = t.length;
+    if (n < 6) return;
+
+    // the predicates below assume CCW triangles; for a CW mesh, swapping each edge's endpoints
+    // mirrors them, so take the winding from the first non-degenerate triangle
+    let cw = false;
+    for (let k = 0, o = 0; o === 0 && k < n; k += 3) {
+        const a = t[k] * dim, b = t[k + 1] * dim, c = t[k + 2] * dim;
+        o = orient(coords[a], coords[a + 1], coords[b], coords[b + 1], coords[c], coords[c + 1]);
+        cw = o < 0;
+    }
+
+    ensureScratch(n);
+    gen++;              // bumping the generation logically empties the hash (no clearing)
+    he.fill(-1, 0, n);
+
+    // Build half-edge twins with an undirected-edge hash; consumed slots mark linked pairs. As each
+    // pair is linked we seed the stack with one representative (s, the earlier-inserted edge) — this
+    // fuses the initial "push every interior edge" pass into the build, saving a full O(n) scan.
+    // edgeStamp is all-zero here (balanced push/pop leaves it clean) and each pair links once, so
+    // the seed write needs no dedup guard.
+    let i = 0;
+    for (let e = 0; e < n; e++) {
+        const a = t[e], b = t[nextHE(e)];
+        const lo = a < b ? a : b, hi = a < b ? b : a;
+        let h = (Math.imul(lo, 0x9e3779b1) ^ Math.imul(hi, 0x85ebca6b)) & hMask;
+        while (hStamp[h] === gen) {
+            const s = hTable[h];
+            // s === -1 marks a consumed slot (a pair already linked) — skip past it
+            if (s !== -1) {
+                const sa = t[s], sb = t[nextHE(s)];
+                if ((sa === lo && sb === hi) || (sa === hi && sb === lo)) {
+                    he[e] = s; he[s] = e; hTable[h] = -1; // link, then consume the slot
+                    edgeStamp[s] = 1; edgeStack[i++] = s; // seed the interior edge for the cascade
+                    break;
+                }
+            }
+            h = (h + 1) & hMask;
+        }
+        if (hStamp[h] !== gen) { hTable[h] = e; hStamp[h] = gen; } // first occurrence: insert
+    }
+
+    while (i > 0) {
+        const a = edgeStack[--i];
+        edgeStamp[a] = 0;
+        const b = he[a];
+        if (b === -1) continue;
+
+        const a0 = a - a % 3;
+        const b0 = b - b % 3;
+        const ar = a0 + (a + 2) % 3;
+        const al = a0 + (a + 1) % 3;
+        const bl = b0 + (b + 2) % 3;
+        const br = b0 + (b + 1) % 3;
+        const p0 = t[ar], pr = t[cw ? al : a], pl = t[cw ? a : al], p1 = t[bl];
+
+        const x0 = coords[p0 * dim], y0 = coords[p0 * dim + 1];
+        const xr = coords[pr * dim], yr = coords[pr * dim + 1];
+        const xl = coords[pl * dim], yl = coords[pl * dim + 1];
+        const x1 = coords[p1 * dim], y1 = coords[p1 * dim + 1];
+
+        // Test inCircle first: most interior edges are already Delaunay (inCircle true → no flip),
+        // so this short-circuits before the two convexity orients on the common path. The quad must
+        // also be convex (both new triangles CCW) — flipping a reflex quad would push a triangle
+        // outside the polygon. Boundary/hole edges need no guard — they self-protect via he === -1.
+        if (!inCircle(x0, y0, xr, yr, xl, yl, x1, y1) &&
+            orient(x0, y0, xr, yr, x1, y1) > 0 && orient(x0, y0, x1, y1, xl, yl) > 0) {
+            t[a] = p1; t[b] = p0;
+            const hbl = he[bl], har = he[ar];
+            he[a] = hbl; if (hbl !== -1) he[hbl] = a;
+            he[b] = har; if (har !== -1) he[har] = b;
+            he[ar] = bl; he[bl] = ar;
+
+            // re-check the quad's four outer edges; skip boundary edges (he === -1) and any
+            // already queued (edgeStamp), which also keeps the stack bounded by n.
+            if (hbl    !== -1 && edgeStamp[a]  === 0) { edgeStamp[a]  = 1; edgeStack[i++] = a; }
+            if (har    !== -1 && edgeStamp[b]  === 0) { edgeStamp[b]  = 1; edgeStack[i++] = b; }
+            if (he[al] !== -1 && edgeStamp[al] === 0) { edgeStamp[al] = 1; edgeStack[i++] = al; }
+            if (he[br] !== -1 && edgeStamp[br] === 0) { edgeStamp[br] = 1; edgeStack[i++] = br; }
+        }
+    }
+}
+
+/** @param {number} ax @param {number} ay @param {number} bx @param {number} by @param {number} cx @param {number} cy */
+function orient(ax, ay, bx, by, cx, cy) {
+    return (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+}
+
+// Whether p is inside or exactly on the circumcircle of triangle (a, b, c). Sign is negated vs the
+// usual predicate to match earcut's CCW winding — the standard sign would build the anti-Delaunay
+// mesh. Cocircular quads are legal ties, so refine only flips when this returns false.
+/** @param {number} ax @param {number} ay @param {number} bx @param {number} by @param {number} cx @param {number} cy @param {number} px @param {number} py */
+function inCircle(ax, ay, bx, by, cx, cy, px, py) {
+    const dx = ax - px, dy = ay - py, ex = bx - px, ey = by - py, fx = cx - px, fy = cy - py;
+    const ap = dx * dx + dy * dy, bp = ex * ex + ey * ey, cp = fx * fx + fy * fy;
+    // A near-cocircular quad is a legal Delaunay tie, but roundoff can flag both an edge and its
+    // flip as illegal, cascading into an endless flip loop (#205) — so treat a determinant within
+    // a small margin of zero as a tie. The determinant's worst-case roundoff error is provably
+    // below 9e-16·(ap + bp + cp)² (Shewchuk-style bound), so the margin guarantees every executed
+    // flip is illegal in exact arithmetic, and Lawson flipping always terminates.
+    const s = ap + bp + cp;
+    return dx * (ey * cp - bp * fy) - dy * (ex * cp - bp * fx) + ap * (ex * fy - ey * fx) <= 1e-13 * s * s;
+}
+
+/** @param {number} e */
+function nextHE(e) { // next half-edge within the same triangle
+    return e - e % 3 + (e + 1) % 3;
+}
+
+// Grow the scratch arrays on demand (like earcut's z-order arrays). Allocating lazily here rather
+// than at module load lets the whole refine() block tree-shake away for callers who don't use it.
+/** @param {number} n */
+function ensureScratch(n) {
+    // edgeStack holds at most one entry per half-edge (edgeStamp dedups), so n is a safe cap —
+    // sizing it up front lets the cascade push without a bounds/grow check.
+    if (!edgeStack || edgeStack.length < n) edgeStack = new Int32Array(n);
+    if (!he || he.length < n) he = new Int32Array(n);
+    if (!edgeStamp || edgeStamp.length < n) edgeStamp = new Uint8Array(n);
+    let size = 1;
+    while (size < n * 4) size <<= 1; // power-of-two table, load factor <= 0.25
+    if (!hTable || hTable.length < size) { hTable = new Int32Array(size); hStamp = new Uint32Array(size); }
+    hMask = size - 1;
+}
+
+return earcut;
+})();
+
+// ===== TOWN CORE (pure) =====
+const ROAD_W = { motorway: 14, trunk: 12, primary: 10, secondary: 8, tertiary: 7, motorway_link: 7, trunk_link: 7, primary_link: 7, secondary_link: 6, tertiary_link: 6,
+  unclassified: 5.5, residential: 5.5, living_street: 5, road: 5, service: 3.5, pedestrian: 4, track: 3, busway: 6,
+  footway: 2, path: 2, cycleway: 2, steps: 2, bridleway: 2 };
+const PATH_TYPES = new Set(['footway', 'path', 'cycleway', 'steps', 'bridleway', 'track']);
+const BLD_DEFAULT = { garage: 3, garages: 3, carport: 3, shed: 3, hut: 3, roof: 4, kiosk: 3, greenhouse: 3, barn: 6, farm_auxiliary: 5, stable: 5,
+  house: 6, detached: 6, semidetached_house: 6, terrace: 7, residential: 8, farm: 6, bungalow: 3.5,
+  apartments: 13, dormitory: 13, hotel: 15, office: 15, school: 10, university: 14, hospital: 16, church: 18, chapel: 8, cathedral: 30,
+  industrial: 9, warehouse: 9, retail: 7, commercial: 9, supermarket: 7, manufacture: 9, public: 10, civic: 10 };
+const FLAT_TYPES = new Set(['apartments', 'industrial', 'warehouse', 'retail', 'commercial', 'supermarket', 'office', 'hospital', 'manufacture', 'parking', 'carport', 'roof', 'greenhouse']);
+
+function parseLen(v) { if (v == null) return NaN; const m = String(v).replace(',', '.').match(/-?\d+(\.\d+)?/); if (!m) return NaN; let x = parseFloat(m[0]); if (/ft|'/.test(v)) x *= 0.3048; return x; }
+function buildingHeight(t, def) {
+  let h = parseLen(t.height);
+  if (!(h > 0)) { const lv = parseLen(t['building:levels']); if (lv > 0) h = lv * 3 + (parseLen(t['roof:levels']) > 0 ? parseLen(t['roof:levels']) * 2 : 0.5); }
+  if (!(h > 0)) h = BLD_DEFAULT[t.building] || def;
+  return Math.min(Math.max(h, 2), 400);
+}
+const emptyFeatures = () => ({ buildings: [], roads: [], rails: [], wlines: [], wpolys: [], woods: [], parks: [], fields: [], hnums: [] });
+
+// Overpass JSON -> features
+function parseOSM(j) {
+  const o = emptyFeatures();
+  for (const el of j.elements || []) {
+    const t = el.tags || {};
+    if (el.type === 'node') { if (t['addr:housenumber']) o.hnums.push({ lat: el.lat, lon: el.lon, num: t['addr:housenumber'] }); continue; }
+    const rings = el.type === 'way' ? (el.geometry ? [el.geometry] : []) : (el.members || []).filter(m => m.geometry).map(m => m.geometry);
+    if (!rings.length) continue;
+    if (t['addr:housenumber'] && t.building) { const g = rings[0]; let la = 0, lo = 0; for (const q of g) { la += q.lat; lo += q.lon; } o.hnums.push({ lat: la / g.length, lon: lo / g.length, num: t['addr:housenumber'] }); }
+    const closed = el.type === 'relation' || (el.geometry && el.geometry.length > 3 && el.geometry[0].lat === el.geometry[el.geometry.length - 1].lat && el.geometry[0].lon === el.geometry[el.geometry.length - 1].lon);
+    const tunnel = t.tunnel && t.tunnel !== 'no';
+    if (t.building && t.building !== 'no' && !t['building:part']) { if (closed) o.buildings.push({ id: el.type[0] + el.id, rings, parts: [rings], tags: t }); }
+    else if (t.highway && el.type === 'way') { if (tunnel || t.area === 'yes') continue; o.roads.push({ pts: el.geometry, kind: t.highway, width: parseLen(t.width) }); }
+    else if (t.railway && el.type === 'way') { if (tunnel || !/^(rail|light_rail|tram|narrow_gauge)$/.test(t.railway)) continue; o.rails.push({ pts: el.geometry, kind: t.railway }); }
+    else if (t.waterway && el.type === 'way' && t.waterway !== 'riverbank') { if (tunnel) continue; o.wlines.push({ pts: el.geometry, kind: t.waterway }); }
+    else if (!closed) continue;
+    else if (t.natural === 'water' || t.waterway === 'riverbank') o.wpolys.push(rings);
+    else if (t.landuse === 'forest' || t.natural === 'wood') o.woods.push(rings);
+    else if (t.leisure === 'park' || t.leisure === 'garden') o.parks.push(rings);
+    else if (t.landuse === 'farmland') o.fields.push(rings);
+  }
+  return o;
+}
+
+function pointInRings(rings, lat, lon) {
+  let inside = false;
+  for (const ring of rings) for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const a = ring[i], c = ring[j];
+    if ((a.lat > lat) !== (c.lat > lat) && lon < (c.lon - a.lon) * (lat - a.lat) / (c.lat - a.lat) + a.lon) inside = !inside;
+  }
+  return inside;
+}
+function findBuildingAt(osm, lat, lon, maxM = 35) {
+  for (let i = 0; i < osm.buildings.length; i++) if (osm.buildings[i].parts.some(pr => pointInRings(pr, lat, lon))) return i;
+  let best = -1, bd = Infinity; const kl = 111320 * Math.cos(lat * Math.PI / 180);
+  osm.buildings.forEach((bl, i) => { for (const r of bl.rings) for (const pt of r) { const d = Math.hypot((pt.lat - lat) * 111200, (pt.lon - lon) * kl); if (d < bd) { bd = d; best = i; } } });
+  return bd <= maxM ? best : -1;
+}
+
+// All buildings belonging to an address: the numbered house plus unnumbered outbuildings
+// (garage, shed…) whose nearest house number is this one.
+const normNum = s => String(s || '').toLowerCase().replace(/\s+/g, '');
+function addressBuildings(osm, addr, withOutbuildings = true) {
+  const kl = 111320 * Math.cos(addr.lat * Math.PI / 180);
+  const dist = (a, b) => Math.hypot((a.lat - b.lat) * 111200, (a.lon - b.lon) * kl);
+  const cent = osm.buildings.map(b => { let la = 0, lo = 0, n = 0; for (const q of b.rings[0] || []) { la += q.lat; lo += q.lon; n++; } return n ? { lat: la / n, lon: lo / n } : addr; });
+  // 1. anchor = matching house-number point nearest to the geocoded spot
+  let anchor = null;
+  if (addr.hn) { let bd = 200; for (const h of osm.hnums) if (normNum(h.num) === normNum(addr.hn)) { const d = dist(h, addr); if (d < bd) { bd = d; anchor = h; } } }
+  const A = anchor || addr;
+  // 2. main building(s): containing the anchor (several pieces possible), else nearest
+  const set = new Set();
+  osm.buildings.forEach((b, i) => { if (b.parts.some(pr => pointInRings(pr, A.lat, A.lon))) set.add(i); });
+  if (!set.size) { const i = findBuildingAt(osm, A.lat, A.lon, 30); if (i >= 0) set.add(i); }
+  if (!set.size || !withOutbuildings || !osm.hnums.length) return { set, anchor: !!anchor };
+  // 3. outbuildings: no house number of their own, nearest number point is the anchor, within 60 m
+  const numbered = new Set();
+  osm.hnums.forEach(h => osm.buildings.forEach((b, i) => { if (dist(cent[i], h) < 60 && b.parts.some(pr => pointInRings(pr, h.lat, h.lon))) numbered.add(i); }));
+  osm.buildings.forEach((b, i) => {
+    if (set.has(i) || numbered.has(i) || dist(cent[i], A) > 60) return;
+    let best = null, bd = Infinity; for (const h of osm.hnums) { const d = dist(cent[i], h); if (d < bd) { bd = d; best = h; } }
+    if (best && dist(best, A) < 1) set.add(i);
+  });
+  return { set, anchor: !!anchor };
+}
+
+// scanline fill of rings (even-odd) on the vertex grid; coordinates in grid units
+function fillRings(ringsXY, nx, ny, cb) {
+  let y0 = Infinity, y1 = -Infinity;
+  for (const r of ringsXY) for (const q of r) { y0 = Math.min(y0, q[1]); y1 = Math.max(y1, q[1]); }
+  const r0 = Math.max(0, Math.ceil(y0)), r1 = Math.min(ny - 1, Math.floor(y1)); let n = 0;
+  for (let row = r0; row <= r1; row++) {
+    const yy = row + 1e-7, xs = [];
+    for (const r of ringsXY) for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+      const ax = r[i][0], ay = r[i][1], bx = r[j][0], by = r[j][1];
+      if ((ay > yy) !== (by > yy)) xs.push(ax + (yy - ay) * (bx - ax) / (by - ay));
+    }
+    xs.sort((a, b) => a - b);
+    for (let k = 0; k + 1 < xs.length; k += 2) {
+      const c0 = Math.max(0, Math.ceil(xs[k])), c1 = Math.min(nx - 1, Math.floor(xs[k + 1]));
+      for (let c = c0; c <= c1; c++) { cb(row * nx + c); n++; }
+    }
+  }
+  return n;
+}
+function strokeLine(ptsXY, hw, nx, ny, cb) {
+  hw = Math.max(hw, 0.55);
+  for (let i = 0; i + 1 < ptsXY.length; i++) {
+    const [ax, ay] = ptsXY[i], [bx, by] = ptsXY[i + 1];
+    const c0 = Math.max(0, Math.floor(Math.min(ax, bx) - hw)), c1 = Math.min(nx - 1, Math.ceil(Math.max(ax, bx) + hw));
+    const r0 = Math.max(0, Math.floor(Math.min(ay, by) - hw)), r1 = Math.min(ny - 1, Math.ceil(Math.max(ay, by) + hw));
+    const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy || 1e-9;
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+      let t = ((c - ax) * dx + (r - ay) * dy) / L2; t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const ex = ax + t * dx - c, ey = ay + t * dy - r;
+      if (ex * ex + ey * ey <= hw * hw) cb(r * nx + c);
+    }
+  }
+}
+// deterministic pseudo random
+function rng(seed) { let s = seed >>> 0 || 1; return () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; }; }
+const ringArea = r => { let a = 0; for (let i = 0, j = r.length - 1; i < r.length; j = i++) a += (r[j][0] - r[i][0]) * (r[j][1] + r[i][1]); return a / 2; };   // >0 = CCW
+function pointInRingXY(r, x, y) { let ins = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const a = r[i], c = r[j]; if ((a[1] > y) !== (c[1] > y) && x < (c[0] - a[0]) * (y - a[1]) / (c[1] - a[1]) + a[0]) ins = !ins; } return ins; }
+// group rings into polygons [outer, ...holes]
+function groupRings(rings) {
+  const rs = rings.map(r => { const q = r.slice(); if (q.length > 1 && q[0][0] === q[q.length - 1][0] && q[0][1] === q[q.length - 1][1]) q.pop(); return q; })
+    .filter(r => r.length >= 3 && Math.abs(ringArea(r)) > 1e-6).sort((a, b) => Math.abs(ringArea(b)) - Math.abs(ringArea(a)));
+  const polys = [];
+  for (const r of rs) { const host = polys.find(pg => pointInRingXY(pg[0], r[0][0], r[0][1])); if (host) host.push(r); else polys.push([r]); }
+  for (const pg of polys) pg.forEach((r, i) => { const ccw = ringArea(r) > 0; if ((i === 0) !== ccw) { r.reverse(); const old = r.map(q => q.cut); for (let j = 0; j < r.length; j++) r[j].cut = old[(j + 1) % r.length]; } });
+  return polys;   // outer CCW, holes CW (cut flags travel with points)
+}
+// Extruded solid with exact outline (vertical walls)
+function prismBody(polys, z0, z1) {
+  const V = [], F = [];
+  for (const pg of polys) {
+    const flat = [], holes = []; let base = V.length / 3;
+    pg.forEach((r, ri) => { if (ri) holes.push(flat.length / 2); for (const q of r) flat.push(q[0], q[1]); });
+    const n = flat.length / 2;
+    for (let i = 0; i < n; i++) V.push(flat[i * 2], flat[i * 2 + 1], z0);
+    for (let i = 0; i < n; i++) V.push(flat[i * 2], flat[i * 2 + 1], z1);
+    const tri = earcut(flat, holes);
+    for (let k = 0; k < tri.length; k += 3) {
+      let a = tri[k], b = tri[k + 1], c = tri[k + 2];
+      const ar = (flat[b * 2] - flat[a * 2]) * (flat[c * 2 + 1] - flat[a * 2 + 1]) - (flat[c * 2] - flat[a * 2]) * (flat[b * 2 + 1] - flat[a * 2 + 1]);
+      if (ar < 0) { const t = b; b = c; c = t; }
+      F.push(base + n + a, base + n + b, base + n + c, base + a, base + c, base + b);
+    }
+    let off = 0;
+    for (const r of pg) { const m = r.length;
+      for (let i = 0; i < m; i++) { const a = base + off + i, b = base + off + (i + 1) % m; F.push(a, b, b + n, a, b + n, a + n); }
+      off += m; }
+  }
+  return F.length ? { V: new Float32Array(V), F: new Uint32Array(F) } : null;
+}
+// clip a ring of [x,y] (with .cut flags = outgoing edge artificial) to the rectangle [0,W]x[0,D]
+function clipRingRect(ring, W, D) {
+  let pts = ring.slice(); if (pts.length > 1 && pts[0][0] === pts[pts.length - 1][0] && pts[0][1] === pts[pts.length - 1][1]) pts.pop();
+  if (pts.every(q => q[0] >= 0 && q[0] <= W && q[1] >= 0 && q[1] <= D)) return pts;
+  const orig = pts;
+  for (const [ax, val, sg] of [[0, 0, 1], [0, W, -1], [1, 0, 1], [1, D, -1]]) {
+    if (!pts.length) break; const out = [];
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length], ia = sg * (a[ax] - val) >= 0, ib = sg * (b[ax] - val) >= 0;
+      if (ia) out.push(a);
+      if (ia !== ib) { const t = (val - a[ax]) / (b[ax] - a[ax]); const q = [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])]; q[ax] = val; out.push(q); }
+    }
+    pts = out;
+  }
+  if (pts.length < 3) return null;
+  const onB = (q, n) => (q[0] === n[0] && (q[0] === 0 || q[0] === W)) || (q[1] === n[1] && (q[1] === 0 || q[1] === D));
+  return pts.map((q, i) => {
+    const n = pts[(i + 1) % pts.length], o = [q[0], q[1]];
+    if (onB(q, n)) { o.cut = true; return o; }
+    const mx = (q[0] + n[0]) / 2, my = (q[1] + n[1]) / 2;
+    for (let k = 0; k < orig.length; k++) { const a = orig[k], b = orig[(k + 1) % orig.length]; if (segDist(mx, my, a[0], a[1], b[0], b[1]) < 1e-4) { o.cut = !!a.cut; break; } }
+    return o;
+  });
+}
+function segDist(px, py, ax, ay, bx, by) { const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy || 1e-12; let t = ((px - ax) * dx + (py - ay) * dy) / L2; t = t < 0 ? 0 : t > 1 ? 1 : t; return Math.hypot(ax + t * dx - px, ay + t * dy - py); }
+
+function computeTown(p, dem, osm, highlight, pitch) {
+  const scale = p.printW / p.areaKm, areaKmY = p.printD / scale;          // mm per km
+  const nx = Math.round(p.printW / pitch) + 1, ny = Math.round(p.printD / pitch) + 1;
+  const dx = p.printW / (nx - 1), dy = p.printD / (ny - 1);
+  const xs = new Float32Array(nx), ys = new Float32Array(ny);
+  for (let c = 0; c < nx; c++) xs[c] = c * dx; for (let r = 0; r < ny; r++) ys[r] = r * dy;
+  const N = nx * ny, kl = 111.32 * Math.cos(p.lat * Math.PI / 180);
+  const H = new Float32Array(N);
+  for (let r = 0; r < ny; r++) { const lat = p.lat + (ys[r] / scale - areaKmY / 2) / 111.2;
+    for (let c = 0; c < nx; c++) H[r * nx + c] = dem(lat, p.lon + (xs[c] / scale - p.areaKm / 2) / kl); }
+  let A = H; for (let it = 0; it < p.smooth; it++) { const B = new Float32Array(N);
+    for (let r = 0; r < ny; r++) for (let c = 0; c < nx; c++) { let s = 0, k = 0;
+      for (let j = -2; j <= 2; j++) { const rr = r + j; if (rr < 0 || rr >= ny) continue; for (let i = -2; i <= 2; i++) { const cc = c + i; if (cc < 0 || cc >= nx) continue; s += A[rr * nx + cc]; k++; } }
+      B[r * nx + c] = s / k; } A = B; }
+  let hmin = Infinity, hmax = -Infinity; for (let i = 0; i < N; i++) { hmin = Math.min(hmin, A[i]); hmax = Math.max(hmax, A[i]); }
+  const mmPerM = scale / 1000;
+  const Z = new Float32Array(N); for (let i = 0; i < N; i++) Z[i] = p.base + p.floor + (p.fields ? p.grooveDepth : 0) + (A[i] - hmin) * mmPerM * p.vex;
+  const zAt = (x, y) => { const fx = Math.min(Math.max(x / dx, 0), nx - 1.001), fy = Math.min(Math.max(y / dy, 0), ny - 1.001); const c = fx | 0, r = fy | 0, ax = fx - c, ay = fy - r, i = r * nx + c;
+    return (Z[i] * (1 - ax) + Z[i + 1] * ax) * (1 - ay) + (Z[i + nx] * (1 - ax) + Z[i + nx + 1] * ax) * ay; };
+
+  // classes: 0 ground, 1 water, 2 road, 3 building, 4 rail
+  const cls = new Uint8Array(N), bid = new Int32Array(N).fill(-1), land = new Uint8Array(N);   // land: 1 wood, 2 park, 3 field
+  const fieldAng = new Float32Array(N);
+  const toMM = pt => [((pt.lon - p.lon) * kl + p.areaKm / 2) * scale, ((pt.lat - p.lat) * 111.2 + areaKmY / 2) * scale];
+  const toG = pt => { const q = toMM(pt); return [q[0] / dx, q[1] / dy]; };
+  const blds = [];
+  if (osm) {
+    if (p.fields) osm.fields.forEach((rings, k) => { const ang = rng(k * 7919 + 13)() * Math.PI; fillRings(rings.map(r => r.map(toG)), nx, ny, i => { land[i] = 3; fieldAng[i] = ang; }); });
+    if (p.parkTrees) for (const rings of osm.parks) fillRings(rings.map(r => r.map(toG)), nx, ny, i => land[i] = 2);
+    if (p.forest) for (const rings of osm.woods) fillRings(rings.map(r => r.map(toG)), nx, ny, i => land[i] = 1);
+    if (p.water) {
+      for (const rings of osm.wpolys) fillRings(rings.map(r => r.map(toG)), nx, ny, i => cls[i] = 1);
+      for (const w of osm.wlines) { if (w.kind === 'stream' && !p.streams) continue; if (!/^(river|canal|stream)$/.test(w.kind)) continue;
+        const wmm = Math.max((w.kind === 'stream' ? 3 : w.kind === 'canal' ? 8 : 15) * mmPerM, p.minWater); strokeLine(w.pts.map(toG), wmm / 2 / dx, nx, ny, i => cls[i] = 1); }
+    }
+    if (p.roads) for (const rd of osm.roads) {
+      const isPath = PATH_TYPES.has(rd.kind); if (isPath && !p.paths) continue;
+      const wm = rd.width > 0 ? rd.width : ROAD_W[rd.kind]; if (!wm) continue;
+      const wmm = Math.max(wm * mmPerM * p.roadScale, isPath ? p.minRoad * 0.7 : p.minRoad);
+      strokeLine(rd.pts.map(toG), wmm / 2 / dx, nx, ny, i => cls[i] = 2);
+    }
+    if (p.rails) for (const rl of osm.rails) strokeLine(rl.pts.map(toG), Math.max(3 * mmPerM * p.roadScale, p.minRoad) / 2 / dx, nx, ny, i => cls[i] = 4);
+    if (p.buildings) osm.buildings.forEach((bl, k) => {
+      const parts = bl.parts.map(pr => pr.map(r => clipRingRect(r.map(pt => { const q = toMM(pt); q.cut = !!pt.cut; return q; }), p.printW, p.printD)).filter(Boolean)).filter(pr => pr.length);
+      const polys = parts.flatMap(pr => groupRings(pr));
+      if (!polys.length) return;
+      let n = 0, zmin = Infinity, zmaxG = -Infinity, cx = 0, cy = 0, m = 0;
+      for (const pg of polys) for (const q of pg[0]) { const z = zAt(q[0], q[1]); zmin = Math.min(zmin, z); zmaxG = Math.max(zmaxG, z); cx += q[0]; cy += q[1]; m++; }
+      for (const pg of polys) n += fillRings(pg.map(r => r.map(q => [q[0] / dx, q[1] / dy])), nx, ny, i => { cls[i] = 3; bid[i] = k; zmin = Math.min(zmin, Z[i]); zmaxG = Math.max(zmaxG, Z[i]); });
+      const edges = [];
+      for (const pg of polys) for (const r of pg) for (let i = 0; i < r.length; i++) { const a = r[i], b = r[(i + 1) % r.length]; if (!a.cut) edges.push([a[0], a[1], b[0], b[1]]); }
+      const hM = buildingHeight(bl.tags, p.defH);
+      blds[k] = { polys, edges, zb: Math.max(p.base + 0.01, zmin - 0.6), eave: zmaxG + Math.max(hM * mmPerM * p.bex, p.minBld), type: bl.tags.building, n };
+    });
+  }
+  // farmland grooves + inlays
+  const S0 = new Float32Array(N), S1 = new Float32Array(N), S2 = new Float32Array(N), S3 = new Float32Array(N), S4 = new Float32Array(N);
+  const per = p.grooveSpacing, gd = p.fields ? p.grooveDepth : 0;
+  for (let r = 0; r < ny; r++) for (let c = 0; c < nx; c++) {
+    const i = r * nx + c, k = cls[i];
+    let z = Z[i];
+    if (land[i] === 3 && k === 0 && gd > 0) { const a = fieldAng[i], u = xs[c] * Math.cos(a) + ys[r] * Math.sin(a); z -= gd * (0.5 + 0.5 * Math.cos(2 * Math.PI * u / per)); }
+    const inlay = k === 1 || k === 2 || k === 4;
+    S0[i] = z - (inlay ? p.carve : 0);
+    S1[i] = S0[i] + (k === 1 ? Math.max(p.carve - 0.2, 0.2) : 0);
+    S2[i] = S1[i] + (k === 2 ? p.carve : 0);
+    S3[i] = S2[i] + (k === 4 ? p.carve + 0.4 : 0);
+    S4[i] = S3[i];
+  }
+  // trees: crowns scattered in forests / parks
+  let nTrees = 0;
+  if (osm && (p.forest || p.parkTrees)) {
+    const R = rng(12345), crownR = p.crown * mmPerM / 2, th = p.treeH * mmPerM * p.treeScale;
+    const sp = Math.max(crownR * 1.5, dx * 2);
+    const canopy = new Float32Array(N);
+    for (let y = sp / 2; y < p.printD; y += sp) for (let x = sp / 2; x < p.printW; x += sp) {
+      const jx = x + (R() - 0.5) * sp * 0.8, jy = y + (R() - 0.5) * sp * 0.8;
+      const c0 = Math.round(jx / dx), r0 = Math.round(jy / dy); if (c0 < 0 || c0 >= nx || r0 < 0 || r0 >= ny) continue;
+      const i0 = r0 * nx + c0, lt = land[i0];
+      if (cls[i0] !== 0 || !lt || lt === 3) continue;
+      if (lt === 2 && R() > 0.28) continue;                                   // sparse park trees
+      const rr = crownR * (0.75 + R() * 0.5), hh = th * (0.75 + R() * 0.45); nTrees++;
+      const rc = Math.ceil(rr / dx) + 1;
+      for (let j = -rc; j <= rc; j++) for (let i = -rc; i <= rc; i++) {
+        const c = c0 + i, r = r0 + j; if (c < 0 || c >= nx || r < 0 || r >= ny) continue;
+        const ii = r * nx + c; if (cls[ii] !== 0) continue;
+        const d = Math.hypot(xs[c] - jx, ys[r] - jy); if (d >= rr) continue;
+        const h = hh * Math.sqrt(1 - (d / rr) ** 2); if (h > canopy[ii]) canopy[ii] = h;
+      }
+    }
+    for (let i = 0; i < N; i++) S4[i] = S3[i] + canopy[i];
+  }
+  // roofs (hip roofs from distance to outline)
+  const tanP = Math.tan(p.roofPitch * Math.PI / 180);
+  const RB = new Float32Array(N), RT = new Float32Array(N), RH = new Float32Array(N), RBh = new Float32Array(N), RTh = new Float32Array(N);
+  let zmax = 0; for (let i = 0; i < N; i++) zmax = Math.max(zmax, S4[i]);
+  const dist = new Float32Array(N), maxD = new Float32Array(blds.length);
+  if (tanP > 0) for (let i = 0; i < N; i++) { const k = bid[i]; if (k < 0 || !blds[k]) continue;
+    const x = xs[i % nx], y = ys[(i / nx) | 0]; let d = Infinity;
+    for (const e of blds[k].edges) { const q = segDist(x, y, e[0], e[1], e[2], e[3]); if (q < d) d = q; }
+    if (!blds[k].polys.some(pg => pointInRingXY(pg[0], x, y) && !pg.slice(1).some(h => pointInRingXY(h, x, y)))) d = 0;
+    dist[i] = d; if (d > maxD[k]) maxD[k] = d; }
+  const pitched = blds.map((b, k) => b && tanP > 0 && !FLAT_TYPES.has(b.type) && maxD[k] / mmPerM <= p.roofMaxW / 2);
+  // owner for every vertex next to a building (roof bottom plane)
+  for (let i = 0; i < N; i++) { RB[i] = RT[i] = RBh[i] = RTh[i] = 0; }
+  const owner = new Int32Array(N).fill(-1);
+  for (let r = 0; r < ny; r++) for (let c = 0; c < nx; c++) { const i = r * nx + c; if (bid[i] >= 0) { owner[i] = bid[i]; continue; }
+    for (let j = -1; j <= 1 && owner[i] < 0; j++) for (let q = -1; q <= 1; q++) { const cc = c + q, rr = r + j; if (cc >= 0 && cc < nx && rr >= 0 && rr < ny && bid[rr * nx + cc] >= 0) { owner[i] = bid[rr * nx + cc]; break; } } }
+  for (let i = 0; i < N; i++) { const k = owner[i]; if (k < 0 || !blds[k]) continue;
+    const e = blds[k].eave, t = bid[i] === k && pitched[k] ? dist[i] * tanP : 0;
+    if (highlight.has(k)) { RBh[i] = e; RTh[i] = e + t; } else { RB[i] = e; RT[i] = e + t; }
+  }
+  blds.forEach((b, k) => { if (b) zmax = Math.max(zmax, b.eave + (pitched[k] ? maxD[k] * tanP : 0)); });
+  return { nx, ny, xs, ys, dx, dy, cls, bid, land, S: [S0, S1, S2, S3, S4], RB, RT, RBh, RTh, blds, pitched, hmin, hmax, zmax, scale, nTrees, hiSet: highlight };
+}
+
+function buildTownBodies(p, m, textMask) {
+  const { nx, ny, xs, ys, S, blds } = m;
+  const N = nx * ny, B0 = new Float32Array(N).fill(p.base);
+  const prisms = (hi) => { const list = []; blds.forEach((b, k) => { if (b && (m.hiSet ? m.hiSet.has(k) : false) === hi) { const pr = prismBody(b.polys, b.zb, b.eave); if (pr) { pr.k = k; list.push(pr); } } }); return list; };
+  const hiPr = prisms(true), bPr = prisms(false);
+  const tri2b = []; for (const pr of [...bPr, ...hiPr]) tri2b.push([pr.k, pr.F.length / 3]);
+  return {
+    house: mergeBodies([...hiPr, hfBody(m.RBh, m.RTh, nx, ny, xs, ys)]),
+    buildings: mergeBodies([...bPr, hfBody(m.RB, m.RT, nx, ny, xs, ys)]),
+    trees: hfBody(S[3], S[4], nx, ny, xs, ys),
+    rail: hfBody(S[2], S[3], nx, ny, xs, ys),
+    roads: hfBody(S[1], S[2], nx, ny, xs, ys),
+    water: hfBody(S[0], S[1], nx, ny, xs, ys),
+    ground: hfBody(B0, S[0], nx, ny, xs, ys),
+    base: boxBody(0, p.printW, -p.strip, p.printD, 0, p.base),
+    text: textMask ? pixelBody(textMask.M, textMask.w, textMask.h, textMask.px, 0, -p.strip, p.base, p.base + p.textH) : null,
+    bPr, hiPr,
+  };
+}
+// ===== END TOWN CORE =====
+
+// ===== Minimal Mapbox Vector Tile decoder + OpenMapTiles -> features =====
+function mvtDecode(u8, want) {
+  let pos = 0; const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+  const varint = () => { let r = 0, s = 1, b; do { b = u8[pos++]; r += (b & 0x7f) * s; s *= 128; } while (b & 0x80); return r; };
+  const skip = wt => { if (wt === 0) varint(); else if (wt === 1) pos += 8; else if (wt === 2) pos += varint(); else if (wt === 5) pos += 4; else throw new Error('bad wire type ' + wt); };
+  const str = (a, b) => new TextDecoder().decode(u8.subarray(a, b));
+  const zz = n => (n % 2 === 1) ? -(n + 1) / 2 : n / 2;
+  const layers = {};
+  while (pos < u8.length) {
+    const key = varint(), f = key >>> 3, wt = key & 7;
+    if (f !== 3 || wt !== 2) { skip(wt); continue; }
+    const len = varint(), end = pos + len;
+    // layer
+    let name = '', extent = 4096; const feats = [], keys = [], vals = [];
+    const featRanges = [];
+    while (pos < end) {
+      const k = varint(), lf = k >>> 3, lwt = k & 7;
+      if (lf === 1 && lwt === 2) { const l = varint(); name = str(pos, pos + l); pos += l; }
+      else if (lf === 2 && lwt === 2) { const l = varint(); featRanges.push([pos, pos + l]); pos += l; }
+      else if (lf === 3 && lwt === 2) { const l = varint(); keys.push(str(pos, pos + l)); pos += l; }
+      else if (lf === 4 && lwt === 2) {
+        const l = varint(), ve = pos + l; let v = null;
+        while (pos < ve) { const vk = varint(), vf = vk >>> 3, vwt = vk & 7;
+          if (vf === 1) { const sl = varint(); v = str(pos, pos + sl); pos += sl; }
+          else if (vf === 2) { v = dv.getFloat32(pos, true); pos += 4; }
+          else if (vf === 3) { v = dv.getFloat64(pos, true); pos += 8; }
+          else if (vf === 4 || vf === 5) v = varint();
+          else if (vf === 6) v = zz(varint());
+          else if (vf === 7) v = !!varint();
+          else skip(vwt); }
+        vals.push(v);
+      }
+      else if (lf === 5 && lwt === 0) extent = varint();
+      else skip(lwt);
+    }
+    pos = end;
+    if (want && !want.includes(name)) continue;
+    const saved = pos;
+    for (const [a, b] of featRanges) {
+      pos = a; let id = 0, type = 0; const tags = [], geom = [];
+      while (pos < b) {
+        const k = varint(), ff = k >>> 3, fwt = k & 7;
+        if (ff === 1 && fwt === 0) id = varint();
+        else if (ff === 2 && fwt === 2) { const l = varint(), e = pos + l; while (pos < e) tags.push(varint()); }
+        else if (ff === 3 && fwt === 0) type = varint();
+        else if (ff === 4 && fwt === 2) { const l = varint(), e = pos + l; while (pos < e) geom.push(varint()); }
+        else skip(fwt);
+      }
+      const props = {}; for (let i = 0; i + 1 < tags.length; i += 2) props[keys[tags[i]]] = vals[tags[i + 1]];
+      // geometry
+      const parts = []; let x = 0, y = 0, cur = null;
+      for (let i = 0; i < geom.length;) {
+        const c = geom[i++], cmd = c & 7, cnt = c >>> 3;
+        if (cmd === 1 || cmd === 2) for (let j = 0; j < cnt; j++) {
+          x += zz(geom[i++]); y += zz(geom[i++]);
+          if (cmd === 1) { cur = [[x, y]]; parts.push(cur); } else cur.push([x, y]);
+        } else if (cmd === 7 && cur) cur.push([cur[0][0], cur[0][1]]);
+      }
+      feats.push({ id, type, props, parts });
+    }
+    pos = saved;
+    layers[name] = { extent, features: feats };
+  }
+  return layers;
+}
+
+const ROAD_CLASS_W = { motorway: 14, trunk: 12, primary: 10, secondary: 8, tertiary: 7, minor: 5.5, service: 3.5, track: 3, path: 2, busway: 6, raceway: 6 };
+// clip a closed ring (tile coords) to [0,E]^2; edges lying on the tile border get .cut = true
+function clipRingToTile(ring, E) {
+  let pts = ring.slice(); if (pts.length > 1 && pts[0][0] === pts[pts.length - 1][0] && pts[0][1] === pts[pts.length - 1][1]) pts.pop();
+  const planes = [[0, 0, 1], [0, E, -1], [1, 0, 1], [1, E, -1]];   // axis, value, sign (inside if sign*(v-value) >= 0)
+  for (const [ax, val, sg] of planes) {
+    if (!pts.length) break; const out = [];
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length], ia = sg * (a[ax] - val) >= 0, ib = sg * (b[ax] - val) >= 0;
+      if (ia) out.push(a);
+      if (ia !== ib) { const t = (val - a[ax]) / (b[ax] - a[ax]); const q = [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])]; q[ax] = val; out.push(q); }
+    }
+    pts = out;
+  }
+  if (pts.length < 3) return null;
+  const on = (q, ax) => q[ax] === 0 || q[ax] === E;
+  return pts.map((q, i) => { const n = pts[(i + 1) % pts.length]; return { q, cut: (q[0] === n[0] && on(q, 0)) || (q[1] === n[1] && on(q, 1)) }; });
+}
+// tiles: [{z,x,y,layers}] -> same structure as parseOSM()
+function omtToFeatures(tiles) {
+  const out = emptyFeatures(), byId = new Map();
+  for (const t of tiles) {
+    const n = 2 ** t.z;
+    const ll = (px, py, ext) => ({ lon: (t.x + px / ext) / n * 360 - 180, lat: Math.atan(Math.sinh(Math.PI * (1 - 2 * (t.y + py / ext) / n))) * 180 / Math.PI });
+    const conv = (L, ext) => L.map(([px, py]) => ll(px, py, ext));
+    const lay = name => t.layers[name] || { features: [], extent: 4096 };
+    { const L = lay('building');
+      for (const f of L.features) { if (f.type !== 3 || f.props.hide_3d) continue;
+        const rings = f.parts.map(r => clipRingToTile(r, L.extent)).filter(Boolean).map(r => r.map(({ q, cut }) => { const o = ll(q[0], q[1], L.extent); o.cut = cut; return o; }));
+        if (!rings.length) continue;
+        const h = +f.props.render_height, mh = +f.props.render_min_height || 0;
+        if (mh > 0 && h - mh < 3) continue;
+        const tags = { building: 'yes', height: h > 0 ? String(h) : undefined };
+        if (f.id && byId.has(f.id)) { const b = out.buildings[byId.get(f.id)]; b.parts.push(rings); b.rings = b.rings.concat(rings); if (h > +b.tags.height || !b.tags.height) b.tags.height = tags.height; continue; }
+        if (f.id) byId.set(f.id, out.buildings.length);
+        out.buildings.push({ id: f.id, rings, parts: [rings], tags });
+      } }
+    { const L = lay('transportation');
+      for (const f of L.features) { if (f.type !== 2) continue; const p = f.props;
+        if (p.brunnel === 'tunnel' || p.class === 'ferry' || /^(aerialway|construction)$/.test(p.class)) continue;
+        if (p.class === 'rail' || p.class === 'transit') { if (/^(rail|light_rail|tram|narrow_gauge)$/.test(p.subclass || 'rail')) for (const ln of f.parts) out.rails.push({ pts: conv(ln, L.extent), kind: p.subclass || 'rail' }); continue; }
+        const kind = p.class === 'path' ? 'footway' : p.class === 'track' ? 'track' : 'omt_' + p.class;
+        const width = ROAD_CLASS_W[p.class]; if (!width) continue;
+        for (const ln of f.parts) out.roads.push({ pts: conv(ln, L.extent), kind, width });
+      } }
+    { const L = lay('water');
+      for (const f of L.features) { if (f.type !== 3 || f.props.class === 'swimming_pool' || f.props.brunnel === 'tunnel') continue; out.wpolys.push(f.parts.map(r => conv(r, L.extent))); } }
+    { const L = lay('waterway');
+      for (const f of L.features) { if (f.type !== 2 || f.props.brunnel === 'tunnel') continue; const k = f.props.class;
+        if (!/^(river|canal|stream)$/.test(k)) continue; for (const ln of f.parts) out.wlines.push({ pts: conv(ln, L.extent), kind: k }); } }
+    { const L = lay('landcover');
+      for (const f of L.features) { if (f.type !== 3) continue; const c = f.props.class, sc = f.props.subclass;
+        if (c === 'wood') out.woods.push(f.parts.map(r => conv(r, L.extent)));
+        else if (c === 'farmland' && (!sc || sc === 'farmland')) out.fields.push(f.parts.map(r => conv(r, L.extent)));
+        else if (c === 'grass' && (sc === 'park' || sc === 'garden')) out.parks.push(f.parts.map(r => conv(r, L.extent))); } }
+    { const L = lay('housenumber');
+      for (const f of L.features) if (f.type === 1 && f.props.housenumber) for (const pt of f.parts) { const q = ll(pt[0][0], pt[0][1], L.extent); q.num = String(f.props.housenumber); out.hnums.push(q); } }
+    { const L = lay('park');
+      for (const f of L.features) if (f.type === 3 && f.props.class === 'park') out.parks.push(f.parts.map(r => conv(r, L.extent))); }
+  }
+  return out;
+}
+// ===== END MVT =====
+
+
+const $ = id => document.getElementById(id);
+const statusEl = $('status');
+const setStatus = (t, err) => { statusEl.textContent = t; statusEl.className = err ? 'err' : ''; if ($('busy').classList.contains('on') && !err) $('busy').textContent = t; };
+const busy = (on, t) => { $('busy').classList.toggle('on', on); if (t) $('busy').textContent = t; };
+const nextFrame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+
+// ---------- roles / tools ----------
+const ROLES = [['house', 'Highlighted (your house)', 1], ['buildings', 'Buildings', 2], ['trees', 'Trees', 2], ['rail', 'Railways', 1], ['roads', 'Roads & paths', 4], ['water', 'Water', 3], ['ground', 'Ground', 2], ['base', 'Base', 4], ['text', 'Label text', 1]];
+for (const [k, label, t] of ROLES) {
+  const d = document.createElement('div'); d.className = 'role';
+  d.innerHTML = `<i id="sw_${k}"></i><span>${label}</span><select id="tool_${k}">${[1, 2, 3, 4].map(i => `<option value="${i}">T${i}</option>`).join('')}</select>`;
+  $('roles').appendChild(d); $('tool_' + k).value = t;
+}
+const toolColor = k => $('col' + $('tool_' + k).value).value;
+
+// ---------- params ----------
+const NUM = ['areaM','printW','printD','bed','pitch','bex','defH','minBld','roofPitch','roofMaxW','treeH','crown','treeScale','grooveDepth','grooveSpacing','vex','smooth','base','floor','roadScale','minRoad','carve','strip','textH','textScale'];
+const BOOL = ['buildings','autoHouse','outbuildings','forest','parkTrees','fields','roads','paths','rails','water','streams','addrLabel'];
+const SAVE = [...NUM, ...BOOL, 'coords','line1','line2','col1','col2','col3','col4', ...ROLES.map(r => 'tool_' + r[0])];
+let line2Auto = true;
+try { const s = JSON.parse(localStorage.getItem('townMaker2') || 'null'); if (s) { for (const k of SAVE) if (k in s && $(k)) { const el = $(k); if (el.type === 'checkbox') el.checked = s[k]; else el.value = s[k]; } line2Auto = s.line2Auto !== false; } } catch (e) {}
+function save() { try { const s = { line2Auto }; for (const k of SAVE) { const el = $(k); s[k] = el.type === 'checkbox' ? el.checked : el.value; } localStorage.setItem('townMaker2', JSON.stringify(s)); } catch (e) {} }
+
+function parseCoords(str) {
+  const dms = [...str.matchAll(/(\d+(?:\.\d+)?)\s*°\s*(?:(\d+(?:\.\d+)?)\s*['′]\s*)?(?:(\d+(?:\.\d+)?)\s*["″]\s*)?([NSEWnsew])/g)];
+  if (dms.length >= 2) {
+    let lat, lon;
+    for (const m of dms) { let v = +m[1] + (+m[2] || 0) / 60 + (+m[3] || 0) / 3600; const h = m[4].toUpperCase(); if (h === 'S' || h === 'W') v = -v; if (h === 'N' || h === 'S') lat = v; else lon = v; }
+    if (lat != null && lon != null) return [lat, lon];
+  }
+  const n = str.match(/-?\d+(?:\.\d+)?/g);
+  if (n && n.length >= 2) { const lat = +n[0], lon = +n[1]; if (Math.abs(lat) <= 85 && Math.abs(lon) <= 180) return [lat, lon]; }
+  return null;
+}
+const dm = (v, pos, neg) => { const a = Math.abs(v), d = Math.floor(a), m = Math.round((a - d) * 60); return `${m === 60 ? d + 1 : d}°${String(m === 60 ? 0 : m).padStart(2, '0')}'${v >= 0 ? pos : neg}`; };
+
+
+
+function params() {
+  const p = {}; for (const k of NUM) p[k] = parseFloat($(k).value) || 0; for (const k of BOOL) p[k] = $(k).checked;
+  const c = parseCoords($('coords').value) || [47.0712, 15.4386]; p.lat = c[0]; p.lon = c[1];
+  p.areaKm = Math.min(Math.max(p.areaM, 50), 5000) / 1000; p.pitch = Math.max(0.2, p.pitch); p.minWater = 1.0;
+  if (p.strip > 0 && p.strip < 6) p.strip = 6;
+  return p;
+}
+function updateLine2() { if (!line2Auto) return; const p = params(); $('line2').value = `${dm(p.lat, 'N', 'S')}   ${dm(p.lon, 'E', 'W')}`; }
+$('line2').addEventListener('input', () => { line2Auto = $('line2').value.trim() === ''; save(); });
+if (line2Auto || !$('line2').value) { line2Auto = true; updateLine2(); }
+for (const el of document.querySelectorAll('.rng')) {
+  const r = el.querySelector('input'), o = el.querySelector('output');
+  const f = () => o.textContent = (+r.value).toFixed(r.step < 1 ? (r.step < 0.1 ? 2 : 1) : 0) + (['bex', 'vex', 'roadScale', 'treeScale'].includes(r.id) ? '×' : r.id === 'roofPitch' ? '°' : '');
+  r.addEventListener('input', f); f();
+}
+
+// ---------- map ----------
+const map = L.map('map', { zoomControl: true, attributionControl: false });
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 }).addTo(map);
+const rect = L.rectangle([[0, 0], [0, 0]], { color: '#f6c21c', weight: 2, fillOpacity: 0.06 }).addTo(map);
+const marker = L.circleMarker([0, 0], { radius: 4, color: '#f6c21c' }).addTo(map);
+function areaBounds(p) { const { areaKmY } = geom(p); const dLat = areaKmY / 2 / KM_LAT, dLon = p.areaKm / 2 / kmLon(p.lat); return [[p.lat - dLat, p.lon - dLon], [p.lat + dLat, p.lon + dLon]]; }
+function updateMap(fit) { const p = params(); const b = areaBounds(p); rect.setBounds(b); marker.setLatLng([p.lat, p.lon]); if (fit) map.fitBounds(b, { padding: [10, 10] }); }
+updateMap(true);
+map.on('click', e => { state.addr = null; $('coords').value = `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`; onLocationChange(); });
+
+// ---------- address search ----------
+async function geocode(q) {
+  const out = [];
+  try {   // Photon (komoot, OSM data)
+    const r = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=6&lang=de`);
+    if (!r.ok) throw new Error('Photon HTTP ' + r.status);
+    const j = await r.json();
+    for (const f of j.features || []) {
+      const pr = f.properties || {}, [lon, lat] = f.geometry.coordinates;
+      const name = pr.name || [pr.street, pr.housenumber].filter(Boolean).join(' ') || pr.city || q;
+      const street = pr.name && pr.street ? [pr.street, pr.housenumber].filter(Boolean).join(' ') : '';
+      const detail = [street, [pr.postcode, pr.city || pr.town || pr.village].filter(Boolean).join(' '), pr.state, pr.country].filter(Boolean).join(', ');
+      out.push({ lat, lon, name, detail, short: pr.name || pr.city || pr.town || pr.village || name, hn: pr.housenumber || '' });
+    }
+  } catch (e) { console.warn(e); }
+  if (out.length) return out;
+  // fallback: Nominatim
+  const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&accept-language=de&q=${encodeURIComponent(q)}`);
+  if (!r.ok) throw new Error('Address lookup failed (HTTP ' + r.status + ')');
+  for (const x of await r.json()) {
+    const parts = x.display_name.split(', ');
+    out.push({ lat: +x.lat, lon: +x.lon, name: x.name || parts[0], detail: parts.slice(1).join(', '), short: x.name || parts[0], hn: (x.address && x.address.house_number) || '' });
+  }
+  return out;
+}
+
+function applyPlace(pl, btn) {
+  state.addr = { lat: pl.lat, lon: pl.lon, hn: pl.hn || '', name: pl.name };
+  $('coords').value = `${pl.lat.toFixed(5)}, ${pl.lon.toFixed(5)}`;
+  if ($('addrLabel').checked) $('line1').value = pl.short.toUpperCase();
+  for (const b of $('addrResults').children) b.classList.toggle('on', b === btn);
+  onLocationChange();
+}
+async function addrSearch() {
+  const q = $('addr').value.trim(); if (!q) return;
+  const ll = parseCoords(q);
+  if (ll && /^[\s\d.,°'′"″NSEWnsew+-]+$/.test(q)) { $('coords').value = `${ll[0].toFixed(5)}, ${ll[1].toFixed(5)}`; $('addrResults').innerHTML = ''; onLocationChange(); return; }
+  $('addrBtn').disabled = true; setStatus('Looking up address…');
+  try {
+    const res = await geocode(q);
+    $('addrResults').innerHTML = '';
+    if (!res.length) { setStatus(`Nothing found for "${q}".`, true); return; }
+    res.forEach(pl => {
+      const b = document.createElement('button'); b.type = 'button';
+      b.innerHTML = `${esc(pl.name)}<small>${esc(pl.detail)} · ${pl.lat.toFixed(5)}, ${pl.lon.toFixed(5)}</small>`;
+      b.onclick = () => applyPlace(pl, b); $('addrResults').appendChild(b);
+    });
+    applyPlace(res[0], $('addrResults').firstChild);
+  } catch (e) { console.error(e); setStatus(e.message + ' — check your internet connection.', true); }
+  finally { $('addrBtn').disabled = false; }
+}
+$('addrBtn').addEventListener('click', addrSearch);
+$('addr').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addrSearch(); } });
+
+// ---------- data ----------
+const tileCache = new Map();
+function loadTile(z, x, y) {
+  const key = `${z}/${x}/${y}`;
+  const hosts = ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/', 'https://elevation-tiles-prod.s3.amazonaws.com/terrarium/'];
+  const one = url => new Promise((res, rej) => {
+    const img = new Image(); img.crossOrigin = 'anonymous';
+    const t = setTimeout(() => { img.src = ''; rej(new Error('timeout')); }, 20000);
+    img.onload = () => { clearTimeout(t); res(img); }; img.onerror = () => { clearTimeout(t); rej(new Error('blocked or missing')); };
+    img.src = url + key + '.png';
+  });
+  if (!tileCache.has(key)) tileCache.set(key, one(hosts[0]).catch(() => one(hosts[1])).catch(err => { tileCache.delete(key); throw new Error(`Elevation tile ${key} failed (${err.message})`); }));
+  return tileCache.get(key);
+}
+const lon2px = (lon, z) => (lon + 180) / 360 * 256 * 2 ** z;
+const lat2px = (lat, z) => { const r = lat * Math.PI / 180; return (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * 256 * 2 ** z; };
+
+async function loadDEM(p) {
+  const [[s, w], [n, e]] = areaBounds(p);
+  const groundPitch = p.pitch / geom(p).scale * 1000;                 // m per mesh cell
+  let z = 15;
+  const res = z => 156543.03 * Math.cos(p.lat * Math.PI / 180) / 2 ** z;
+  while (z > 5 && res(z) < groundPitch / 2) z--;
+  let tx0, tx1, ty0, ty1;
+  for (;;) {
+    tx0 = Math.floor(lon2px(w, z) / 256); tx1 = Math.floor(lon2px(e, z) / 256);
+    ty0 = Math.floor(lat2px(n, z) / 256); ty1 = Math.floor(lat2px(s, z) / 256);
+    if ((tx1 - tx0 + 1) * (ty1 - ty0 + 1) <= 144 || z <= 5) break; z--;
+  }
+  const cw = (tx1 - tx0 + 1) * 256, ch = (ty1 - ty0 + 1) * 256;
+  const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+  const ctx = cv.getContext('2d', { willReadFrequently: true });
+  const jobs = [];
+  for (let x = tx0; x <= tx1; x++) for (let y = ty0; y <= ty1; y++) jobs.push(loadTile(z, x, y).then(img => ctx.drawImage(img, (x - tx0) * 256, (y - ty0) * 256)));
+  let done = 0; jobs.forEach(j => j.then(() => setStatus(`Elevation tiles ${++done}/${jobs.length} (zoom ${z})…`)));
+  await Promise.all(jobs);
+  const d = ctx.getImageData(0, 0, cw, ch).data, Hm = new Float32Array(cw * ch);
+  for (let i = 0; i < cw * ch; i++) Hm[i] = d[i * 4] * 256 + d[i * 4 + 1] + d[i * 4 + 2] / 256 - 32768;
+  const ox = tx0 * 256, oy = ty0 * 256;
+  return (lat, lon) => {
+    let fx = lon2px(lon, z) - ox - 0.5, fy = lat2px(lat, z) - oy - 0.5;
+    fx = Math.min(Math.max(fx, 0), cw - 1.001); fy = Math.min(Math.max(fy, 0), ch - 1.001);
+    const x0 = fx | 0, y0 = fy | 0, ax = fx - x0, ay = fy - y0, i = y0 * cw + x0;
+    return (Hm[i] * (1 - ax) + Hm[i + 1] * ax) * (1 - ay) + (Hm[i + cw] * (1 - ax) + Hm[i + cw + 1] * ax) * ay;
+  };
+}
+
+
+async function fetchT(url, opt = {}, ms = 20000) {
+  const ac = new AbortController(), to = setTimeout(() => ac.abort(), ms);
+  try { return await fetch(url, { ...opt, signal: ac.signal }); } finally { clearTimeout(to); }
+}
+let ofmTiles = null;
+async function loadOFM(p) {             // OpenFreeMap vector tiles (OpenMapTiles schema, z14)
+  if (!ofmTiles) { const r = await fetchT('https://tiles.openfreemap.org/planet'); if (!r.ok) throw new Error('OpenFreeMap HTTP ' + r.status); ofmTiles = (await r.json()).tiles[0]; }
+  const [[s, w], [n, e]] = areaBounds(p), z = 14;
+  const tx0 = Math.floor(lon2px(w, z) / 256), tx1 = Math.floor(lon2px(e, z) / 256), ty0 = Math.floor(lat2px(n, z) / 256), ty1 = Math.floor(lat2px(s, z) / 256);
+  if ((tx1 - tx0 + 1) * (ty1 - ty0 + 1) > 64) throw new Error('Area too large for building data — use max. ~5 km');
+  const jobs = [];
+  for (let x = tx0; x <= tx1; x++) for (let y = ty0; y <= ty1; y++) jobs.push((async () => {
+    const r = await fetchT(ofmTiles.replace('{z}', z).replace('{x}', x).replace('{y}', y));
+    if (r.status === 204 || r.status === 404) return { z, x, y, layers: {} };
+    if (!r.ok) throw new Error('OpenFreeMap tile HTTP ' + r.status);
+    return { z, x, y, layers: mvtDecode(new Uint8Array(await r.arrayBuffer()), ['building', 'transportation', 'water', 'waterway', 'landcover', 'park', 'housenumber']) };
+  })());
+  return omtToFeatures(await Promise.all(jobs));
+}
+async function loadOverpass(p) {
+  const [[s, w], [n, e]] = areaBounds(p);
+  const pad = 0.0005, bb = [s - pad, w - pad, n + pad, e + pad].map(v => v.toFixed(5)).join(',');
+  const q = `[out:json][timeout:60];(way["building"](${bb});relation["building"]["type"="multipolygon"](${bb});way["highway"](${bb});way["waterway"~"^(river|canal|stream|riverbank)$"](${bb});way["natural"="water"](${bb});relation["natural"="water"](${bb});way["railway"](${bb});way["landuse"~"^(forest|farmland)$"](${bb});way["natural"="wood"](${bb});relation["landuse"="forest"](${bb});relation["natural"="wood"](${bb});way["leisure"~"^(park|garden)$"](${bb});node["addr:housenumber"](${bb}););out geom;`;
+  let lastErr;
+  for (const url of ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://overpass.kumi.systems/api/interpreter']) {
+    try {
+      setStatus('Trying backup source: ' + new URL(url).host + '…');
+      const r = await fetchT(url, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }, 25000);
+      if (!r.ok) throw new Error('Overpass HTTP ' + r.status);
+      return parseOSM(await r.json());
+    } catch (err) { console.warn(url, err); lastErr = err; }
+  }
+  throw lastErr || new Error('Overpass not reachable');
+}
+const osmCache = new Map();
+async function loadOSM(p) {
+  const key = areaBounds(p).flat().map(v => v.toFixed(5)).join(',');
+  if (osmCache.has(key)) return osmCache.get(key);
+  let osm, src;
+  try { setStatus('Loading buildings & roads (OpenFreeMap)…'); osm = await loadOFM(p); src = 'OpenFreeMap'; }
+  catch (err) { console.warn('OpenFreeMap failed', err); osm = await loadOverpass(p); src = 'Overpass'; }
+  osm.source = src; osmCache.set(key, osm); return osm;
+}
+
+// ---------- label ----------
+async function textCanvas(p, color) {
+  const px = 0.1, w = Math.round(p.printW / px), h = Math.round(p.strip / px);
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  if (!h) return { cv, w, h, px };
+  try { await Promise.race([document.fonts.load('700 100px Poppins'), new Promise(r => setTimeout(r, 3000))]); } catch (e) {}
+  const ctx = cv.getContext('2d'); ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const lines = [[$('line1').value.trim(), 0.36, 0.50], [$('line2').value.trim(), 0.77, 0.24]];
+  for (const [t, cy, size] of lines) {
+    if (!t) continue;
+    let fs = h * size * p.textScale; ctx.font = `700 ${fs}px Poppins, Arial, sans-serif`;
+    const mw = ctx.measureText(t).width; if (mw > w * 0.94) { fs *= w * 0.94 / mw; ctx.font = `700 ${fs}px Poppins, Arial, sans-serif`; }
+    const y = (!$('line2').value.trim() && cy < 0.5) ? 0.5 : (!$('line1').value.trim() ? 0.5 : cy);
+    ctx.fillText(t, w / 2, y * h);
+  }
+  return { cv, w, h, px };
+}
+async function textMask(p) {
+  if (p.strip <= 0) return null;
+  const { cv, w, h, px } = await textCanvas(p, '#fff');
+  const d = cv.getContext('2d').getImageData(0, 0, w, h).data, M = new Uint8Array(w * h);
+  for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) M[r * w + c] = d[((h - 1 - r) * w + c) * 4 + 3] > 127 ? 1 : 0;
+  return { M, w, h, px };
+}
+
+
+
+// ---------- 3D preview ----------
+const view = $('view');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); view.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x111317);
+const camera = new THREE.PerspectiveCamera(40, 1, 1, 5000); camera.up.set(0, 0, 1);
+const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true;
+scene.add(new THREE.HemisphereLight(0xffffff, 0x404048, 1.1));
+const sun = new THREE.DirectionalLight(0xffffff, 2.2); sun.position.set(-200, 250, 300); scene.add(sun);
+const fillL = new THREE.DirectionalLight(0xffffff, 0.6); fillL.position.set(250, -200, 120); scene.add(fillL);
+const group = new THREE.Group(); scene.add(group);
+const bedLine = new THREE.LineLoop(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x3a3f4a })); scene.add(bedLine);
+
+const roleMats = {}; for (const [k] of ROLES) roleMats[k] = new THREE.MeshStandardMaterial({ roughness: 0.8, metalness: 0, flatShading: true });
+const labelMat = new THREE.MeshStandardMaterial({ transparent: true, alphaTest: 0.5, roughness: 0.8 });
+let labelTex = null, pickMeshes = [];
+function resize() { const r = view.getBoundingClientRect(); renderer.setSize(r.width, r.height); camera.aspect = r.width / r.height; camera.updateProjectionMatrix(); }
+new ResizeObserver(resize).observe(view); resize();
+(function loop() { requestAnimationFrame(loop); controls.update(); renderer.render(scene, camera); })();
+
+let state = { dem: null, osm: null, highlight: new Set(), model: null, fitted: false, addr: null };
+
+function toGeom(body) {
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(body.V, 3)); g.setIndex(new THREE.BufferAttribute(body.F, 1)); g.computeVertexNormals(); return g;
+}
+async function rebuildPreview() {
+  if (!state.dem) return;
+  const p = params();
+  const maxV = 300000; const pp = Math.max(p.pitch, Math.sqrt(p.printW * p.printD / maxV));
+  const m = computeTown(p, state.dem, state.osm, state.highlight, pp); state.model = m;
+  const B = buildTownBodies({ ...p, strip: p.strip }, m, null);
+  for (const ch of [...group.children]) { ch.geometry.dispose(); group.remove(ch); }
+  pickMeshes = [];
+  for (const [k] of ROLES) { if (k === 'text' || !B[k] || !B[k].F.length) continue; const mesh = new THREE.Mesh(toGeom(B[k]), roleMats[k]); group.add(mesh); pickMeshes.push(mesh); }
+  if (p.strip > 0) {
+    const { cv } = await textCanvas(p, '#ffffff');
+    if (labelTex) labelTex.dispose(); labelTex = new THREE.CanvasTexture(cv); labelTex.colorSpace = THREE.SRGBColorSpace; labelTex.anisotropy = 8;
+    labelMat.map = labelTex; labelMat.needsUpdate = true;
+    const lm = new THREE.Mesh(new THREE.PlaneGeometry(p.printW, p.strip), labelMat); lm.position.set(p.printW / 2, -p.strip / 2, p.base + p.textH); group.add(lm);
+  }
+  updateColors();
+  const bh = p.bed / 2, cx = p.printW / 2, cy = (p.printD - p.strip) / 2;
+  bedLine.geometry.setFromPoints([new THREE.Vector3(cx - bh, cy - bh, 0), new THREE.Vector3(cx + bh, cy - bh, 0), new THREE.Vector3(cx + bh, cy + bh, 0), new THREE.Vector3(cx - bh, cy + bh, 0)]);
+  if (!state.fitted) { controls.target.set(cx, cy, m.zmax / 4); camera.position.set(cx - p.printW * 0.3, cy - p.printD * 1.4, Math.max(p.printW, p.printD) * 1.05); state.fitted = true; }
+  const fits = p.printW <= p.bed && p.printD + p.strip <= p.bed;
+  const nB = m.blds.filter(Boolean).length, nP = m.pitched.filter(Boolean).length;
+  $('hud').innerHTML = `<b>${p.printW.toFixed(0)} × ${(p.printD + p.strip).toFixed(0)} × ${m.zmax.toFixed(1)} mm</b>${fits ? '' : ' <span style="color:#ff7a6b">larger than bed</span>'}<br>` +
+    `Scale 1:${Math.round(1e6 / m.scale).toLocaleString('de-AT')} · 10 m = ${(m.scale / 100).toFixed(1)} mm · elevation ${m.hmin.toFixed(0)}–${m.hmax.toFixed(0)} m<br>` +
+    (state.osm ? `${nB} buildings (${nP} pitched roofs) · ${m.nTrees} trees · ${state.highlight.size} highlighted` : 'Buildings not loaded yet') + (pp > p.pitch ? `<br>Preview at ${pp.toFixed(2)} mm, export at ${p.pitch} mm` : '');
+}
+function updateColors() {
+  for (const [k] of ROLES) { $('sw_' + k).style.background = toolColor(k); if (roleMats[k]) roleMats[k].color.set(toolColor(k)); }
+  labelMat.color.set(toolColor('text'));
+}
+updateColors();
+
+// click a building to toggle highlight
+const ray = new THREE.Raycaster(); let downAt = null;
+renderer.domElement.addEventListener('pointerdown', e => { downAt = [e.clientX, e.clientY]; });
+renderer.domElement.addEventListener('pointerup', e => {
+  if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 5 || !pickMeshes.length || !state.model) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  ray.setFromCamera(new THREE.Vector2((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1), camera);
+  const hit = ray.intersectObjects(pickMeshes)[0]; if (!hit) return;
+  const m = state.model, c0 = Math.round(hit.point.x / m.dx), r0 = Math.round(hit.point.y / m.dy);
+  let id = -1;
+  for (let rad = 0; rad <= 2 && id < 0; rad++) for (let j = -rad; j <= rad && id < 0; j++) for (let i = -rad; i <= rad && id < 0; i++) {
+    const c = c0 + i, rr = r0 + j; if (c >= 0 && c < m.nx && rr >= 0 && rr < m.ny && m.bid[rr * m.nx + c] >= 0) id = m.bid[rr * m.nx + c];
+  }
+  if (id < 0) return;
+  if (state.highlight.has(id)) state.highlight.delete(id); else state.highlight.add(id);
+  rebuildPreview();
+});
+$('clearHi').addEventListener('click', () => { state.highlight.clear(); rebuildPreview(); });
+
+// ---------- loading ----------
+let loadSeq = 0;
+async function loadArea() {
+  const seq = ++loadSeq; const p = params();
+  if (!parseCoords($('coords').value)) { setStatus('Could not read the coordinates — use e.g. "47.0712, 15.4386".', true); return; }
+  updateMap(true); busy(true, 'Loading terrain…'); $('fetchBtn').disabled = true;
+  state.osm = null; state.highlight = new Set();
+  const osmP = loadOSM(p).then(o => ({ o }), err => ({ err }));
+  try {
+    const dem = await loadDEM(p);
+    if (seq !== loadSeq) return;
+    state.dem = dem; state.fitted = false;
+    await rebuildPreview();
+    busy(false);
+    setStatus('Terrain loaded — loading buildings & roads from OpenStreetMap…');
+    const { o, err } = await osmP;
+    if (seq !== loadSeq) return;
+    if (err) { setStatus('Buildings could not be loaded (OpenStreetMap server busy). Press "Load area" to retry.', true); return; }
+    state.osm = o;
+    const msg = highlightAddress();
+    await rebuildPreview();
+    $('dl3mf').disabled = $('dlStl').disabled = false;
+    setStatus(`Loaded ${o.buildings.length} buildings (${o.source}).` + msg);
+  } catch (err) { console.error(err); setStatus(err.message + ' — check your internet connection.', true); }
+  finally { if (seq === loadSeq) { busy(false); $('fetchBtn').disabled = false; } }
+}
+function highlightAddress() {
+  if (!$('autoHouse').checked || !state.osm) return '';
+  const p = params(), a = state.addr || { lat: p.lat, lon: p.lon, hn: '' };
+  const { set, anchor } = addressBuildings(state.osm, a, $('outbuildings').checked);
+  state.highlight = set;
+  const where = state.addr ? (state.addr.name || 'the address') : 'the center point';
+  if (!set.size) return ` No building found at ${where} — click one in the 3D view to highlight it.`;
+  return ` Highlighted ${set.size} building${set.size > 1 ? 's' : ''} at ${where}` + (a.hn && !anchor ? ' (house number not in map data, used the nearest building)' : '') + '.';
+}
+$('autoHouse').addEventListener('change', () => { if ($('autoHouse').checked) { const m = highlightAddress(); setStatus(m.trim()); } else state.highlight.clear(); rebuildPreview(); });
+$('outbuildings').addEventListener('change', () => { save(); if ($('autoHouse').checked) { setStatus(highlightAddress().trim()); rebuildPreview(); } });
+let locTimer;
+function onLocationChange() { if ($('coords').value.trim() && !parseCoords($('coords').value)) { $('addr').value = $('coords').value; $('coords').value = ''; addrSearch(); return; } updateLine2(); updateMap(true); save(); clearTimeout(locTimer); locTimer = setTimeout(loadArea, 700); }
+$('fetchBtn').addEventListener('click', loadArea);
+$('coords').addEventListener('change', () => { state.addr = null; onLocationChange(); });
+for (const id of ['areaM', 'printW', 'printD']) $(id).addEventListener('change', () => onLocationChange());
+let pvTimer;
+const schedule = () => { save(); clearTimeout(pvTimer); pvTimer = setTimeout(() => rebuildPreview().catch(e => setStatus(e.message, true)), 150); };
+for (const id of [...NUM.filter(k => !['areaM','printW','printD'].includes(k)), 'line1', 'line2', ...BOOL.filter(k => !['autoHouse','addrLabel'].includes(k))]) $(id).addEventListener('input', schedule);
+for (const id of ['autoHouse', 'addrLabel']) $(id).addEventListener('change', save);
+$('clearHi').addEventListener('click', () => { $('autoHouse').checked = false; save(); });
+for (const id of ['col1','col2','col3','col4', ...ROLES.map(r => 'tool_' + r[0])]) $(id).addEventListener('input', () => { save(); updateColors(); });
+
+// ---------- export ----------
+function slug() { return ($('line1').value || 'town').normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^\w]+/g, '_').replace(/^_|_$/g, '').toLowerCase() || 'town'; }
+function download(u8, name, type) { const url = URL.createObjectURL(new Blob([u8], { type })); const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 20000); }
+async function buildExport() {
+  const p = params();
+  busy(true, 'Building meshes…'); await nextFrame();
+  const m = computeTown(p, state.dem, state.osm, state.highlight, p.pitch);
+  const tm = await textMask(p);
+  const B = buildTownBodies(p, m, tm);
+  const parts = ROLES.map(([k]) => ({ name: k, body: B[k], tool: +$('tool_' + k).value })).filter(x => x.body && x.body.F && x.body.F.length);
+  return { p, parts };
+}
+$('dl3mf').addEventListener('click', async () => {
+  try {
+    const { p, parts } = await buildExport();
+    busy(true, 'Writing 3MF…'); await nextFrame();
+    const files = build3MF(parts, p, $('line1').value || 'Town');
+    busy(true, 'Compressing…'); await nextFrame();
+    const zip = zipSync(files, { level: 6 });
+    download(zip, slug() + '_town.3mf', 'model/3mf');
+    const tris = parts.reduce((s, x) => s + x.body.F.length / 3, 0);
+    $('exportInfo').textContent = `3MF: ${parts.length} parts, ${(tris / 1e6).toFixed(2)} M triangles, ${(zip.length / 1e6).toFixed(1)} MB. ` + parts.map(x => `${x.name} → T${x.tool}`).join(', ');
+  } catch (err) { console.error(err); setStatus('Export failed: ' + err.message, true); }
+  finally { busy(false); }
+});
+$('dlStl').addEventListener('click', async () => {
+  try {
+    const { parts } = await buildExport();
+    busy(true, 'Writing STLs…'); await nextFrame();
+    const files = {}; parts.forEach((x, i) => files[`${slug()}_${i + 1}_${x.name}_T${x.tool}.stl`] = buildSTL(x.body, x.name));
+    download(zipSync(files, { level: 6 }), slug() + '_town_stls.zip', 'application/zip');
+    $('exportInfo').textContent = 'STLs: drag all files into the slicer at once and answer "Yes" to load them as one multi-part object.';
+  } catch (err) { console.error(err); setStatus('Export failed: ' + err.message, true); }
+  finally { busy(false); }
+});
+
+loadArea();
+</script>
+</body>
+</html>
