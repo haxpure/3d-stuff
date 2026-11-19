@@ -349,6 +349,11 @@ window.FS = (() => {
     'POI in the middle of the map (your address)': 'POI in der Kartenmitte (deine Adresse)', 'Middle POI shape': 'Form des Mitte-POI', 'Center': 'Mitte',
     'Enlarge the map until this trail fits (center stays)': 'Karte vergrößern, bis dieser Weg ganz draufpasst (Mitte bleibt)', 'This trail already fits.': 'Dieser Weg passt schon ganz drauf.',
     'Max. colors': 'Max. Farben', 'the most used colors / mixes are kept': 'die am meisten genutzten Farben / Mischungen bleiben',
+    // --- Relief: bed fill + middle POI ---
+    "Trails fill the bed: print size grows to the bed and follows the trail's shape": 'Wege füllen das Druckbett: Druckgröße wächst bis zum Bett und folgt der Form des Wegs',
+    'Use the whole bed now': 'Jetzt ganzes Druckbett nutzen', 'Fit the map to this trail (center stays)': 'Karte an diesen Weg anpassen (Mitte bleibt)',
+    'Middle POI size (mm)': 'Größe Mitte-POI (mm)', 'Middle POI height (mm)': 'Höhe Mitte-POI (mm)', 'Middle POI color': 'Farbe Mitte-POI',
+    'Automatic (like the other POIs)': 'Automatisch (wie die anderen POIs)', 'Middle POI name': 'Name Mitte-POI', 'empty = found place': 'leer = gefundener Ort', 'automatic': 'automatisch',
     // --- Town Maker simple mode ---
     'Your house': 'Dein Haus', 'Tap any building in the 3D view to highlight it or remove the highlight.': 'Tippe ein Gebäude in der 3D-Ansicht an, um es zu markieren oder die Markierung zu entfernen.',
     'Load an area to see the suggestions.': 'Lade ein Gebiet, um die Vorschläge zu sehen.',
@@ -392,6 +397,8 @@ window.FS = (() => {
     [/^Added (\d+) POIs \((\d+) peaks, (\d+) huts\)\.$/, '$1 POIs hinzugefügt ($2 Gipfel, $3 Hütten).'], [/^Added POI "(.*)"\.$/, 'POI „$1" hinzugefügt.'],
     [/^Imported (\d+) trail\(s\), (\d+) waypoint\(s\) — moved the print area onto the track\.$/, '$1 Weg(e), $2 Wegpunkt(e) importiert – Druckbereich auf den Track verschoben.'],
     [/^Imported (\d+) trail\(s\) — map enlarged to ([\d.]+) km so the whole track fits \(center unchanged\)\.$/, '$1 Weg(e) importiert – Karte auf $2 km vergrößert, damit der ganze Track draufpasst (Mitte bleibt).'],
+    [/^Imported (\d+) trail\(s\) — map set to ([\d.]+) km and (\d+) × (\d+) mm so the whole track fits \(center unchanged\)\.$/, '$1 Weg(e) importiert – Karte auf $2 km und $3 × $4 mm gesetzt, damit der ganze Track draufpasst (Mitte bleibt).'],
+    [/^Map fitted to the trail: ([\d.]+) km, (\d+) × (\d+) mm\.$/, 'Karte an den Weg angepasst: $1 km, $2 × $3 mm.'], [/^Print size (\d+) × (\d+) mm · area ([\d.]+) km\.$/, 'Druckgröße $1 × $2 mm · Gebiet $3 km.'],
     [/^Trail added — map enlarged to ([\d.]+) km so it fits\.$/, 'Weg hinzugefügt – Karte auf $1 km vergrößert, damit er draufpasst.'], [/^Map enlarged to ([\d.]+) km\.$/, 'Karte auf $1 km vergrößert.'],
     [/^Imported (\d+) trail\(s\), (\d+) waypoint\(s\) as POIs\.$/, '$1 Weg(e) und $2 Wegpunkt(e) als POIs importiert.'], [/^Imported (\d+) trail\(s\)\.$/, '$1 Weg(e) importiert.'],
     [/^Created (\d+) filaments from the imagery — rename them to your spools and match the tools\.$/, '$1 Farben aus dem Satellitenbild erzeugt – benenne sie nach deinen Spulen und ordne die Tools zu.'],

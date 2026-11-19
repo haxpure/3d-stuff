@@ -140,11 +140,13 @@
     <div class="opts" id="sOpts"></div>
   </div>
 
-  <details open><summary>Print size</summary>
+  <details open id="dPrint"><summary>Print size</summary>
     <div class="row"><label>Map width (mm)</label><input type="number" id="printW" value="160" min="40" max="300"></div>
     <div class="row"><label>Map depth (mm)</label><input type="number" id="printD" value="180" min="40" max="300"></div>
     <div class="row"><label>Bed size (mm)<small>used to center the model</small></label><input type="number" id="bed" value="270" min="100" max="600"></div>
     <div class="row"><label>Mesh resolution (mm)<small>smaller = finer, bigger file</small></label><input type="number" id="pitch" value="0.5" min="0.3" max="2" step="0.1"></div>
+    <label class="check"><input type="checkbox" id="fillBed" checked> Trails fill the bed: print size grows to the bed and follows the trail's shape</label>
+    <div class="btns" style="grid-template-columns:1fr"><button id="fillBedBtn" class="sec" type="button">Use the whole bed now</button></div>
   </details>
 
   <details open><summary>Relief</summary>
@@ -242,7 +244,14 @@
     <div class="mini"><button type="button" id="osmPeaks">+ OSM peaks &amp; huts</button><button type="button" id="poiClear">Remove all</button></div>
     <div class="row"><label>Max. per type<small>highest first</small></label><input type="number" id="osmMax" value="6" min="1" max="40"></div>
     <label class="check"><input type="checkbox" id="poiCenter" checked> POI in the middle of the map (your address)</label>
-    <div class="row" id="rowPoiCenter"><label>Middle POI shape</label><select id="poiCenterShape"><option value="star">★ Star</option><option value="tri">▲ Triangle (summit)</option><option value="dot">● Dot</option><option value="ring">◯ Ring</option><option value="square">■ Square (hut)</option><option value="diamond">◆ Diamond</option></select></div>
+    <div id="rowPoiCenter" style="border-left:2px solid var(--line);padding-left:8px;margin:4px 0 8px">
+      <div class="row"><label>Middle POI shape</label><select id="poiCenterShape"><option value="star">★ Star</option><option value="tri">▲ Triangle (summit)</option><option value="dot">● Dot</option><option value="ring">◯ Ring</option><option value="square">■ Square (hut)</option><option value="diamond">◆ Diamond</option></select></div>
+      <div class="row"><label>Middle POI size (mm)</label><input type="number" id="poiCenterSize" value="5" min="1.5" max="20" step="0.5"></div>
+      <div class="row"><label>Middle POI height (mm)</label><input type="number" id="poiCenterH" value="1.6" min="0.4" max="8" step="0.2"></div>
+      <div class="row"><label>Middle POI color</label><select id="cpoiFil"></select></div>
+      <div class="row hide" id="rowCpoiColor"><label>Custom color<small id="cpoiColorHint"></small></label><input type="color" id="cpoiColor" value="#ff3b30" style="width:100%;height:30px;border:1px solid var(--line);border-radius:6px;background:none;padding:0"></div>
+      <div class="row"><label>Middle POI name<small>empty = found place</small></label><input type="text" id="poiCenterName" placeholder="automatic"></div>
+    </div>
     <div id="poiList" class="list"></div>
     <div class="row"><label>Shape for new POIs</label><select id="poiShape"><option value="tri">▲ Triangle (summit)</option><option value="dot">● Dot</option><option value="ring">◯ Ring</option><option value="square">■ Square (hut)</option><option value="diamond">◆ Diamond</option><option value="star">★ Star</option></select></div>
     <div class="row"><label>Marker size (mm)</label><input type="number" id="poiSize" value="3.5" min="1.5" max="12" step="0.5"></div>
@@ -444,7 +453,7 @@ function computeModel(p, dem, feats, pitch) {
   const prisms = [], pads = []; let poiSkipped = 0;
   const PADZ = new Float32Array(N).fill(-Infinity);
   for (const q of feats.pois || []) {
-    const [X, Y] = toMM(q.lat, q.lon), R = p.poiSize / 2;
+    const [X, Y] = toMM(q.lat, q.lon), R = (q.size || p.poiSize) / 2;
     if (X - R < 0 || Y - R < 0 || X + R > p.printW || Y + R > p.printD) { poiSkipped++; continue; }
     const pr = R + 1.6 * d, cells = []; let zp = -Infinity;
     for (let r = Math.max(0, Math.floor((Y - pr) / dy)); r <= Math.min(ny - 1, Math.ceil((Y + pr) / dy)); r++)
@@ -454,7 +463,7 @@ function computeModel(p, dem, feats, pitch) {
     for (const i of cells) if (zp > PADZ[i]) PADZ[i] = zp;
   }
   for (let i = 0; i < N; i++) if (PADZ[i] > -Infinity) { Zc[i] = PADZ[i]; TR[i] = 0; W[i] = 0; }
-  for (const pd of pads) { let zb = -Infinity; for (const i of pd.cells) zb = Math.max(zb, PADZ[i]); prisms.push({ shape: pd.q.shape || 'tri', name: pd.q.name || '', X: pd.X, Y: pd.Y, R: pd.R, z0: zb, z1: zb + p.poiH }); }
+  for (const pd of pads) { let zb = -Infinity; for (const i of pd.cells) zb = Math.max(zb, PADZ[i]); prisms.push({ shape: pd.q.shape || 'tri', name: pd.q.name || '', center: !!pd.q.center, X: pd.X, Y: pd.Y, R: pd.R, z0: zb, z1: zb + (pd.q.h || p.poiH) }); }
 
   // ---- trails ----
   const TM = new Uint8Array(N);
@@ -683,7 +692,7 @@ function buildBodies(p, m, textMask, plan, A) {
   const Ut = new Float32Array(N); for (let i = 0; i < N; i++) Ut[i] = Zc[i] + TR[i];
   add(A.water, hfBody(Zc, Ut, nx, ny, xs, ys));
   add(A.trail, hfBody(TL, TU, nx, ny, xs, ys));
-  add(A.poi, mergeBodies(prisms.map(pr => prismBody(pr.shape, pr.X, pr.Y, pr.R, pr.z0, pr.z1))));
+  for (const [f, c] of [[A.poi, false], [A.cpoi ?? A.poi, true]]) add(f, mergeBodies(prisms.filter(pr => pr.center === c).map(pr => prismBody(pr.shape, pr.X, pr.Y, pr.R, pr.z0, pr.z1))));
   add(A.base, boxBody(0, p.printW, -p.strip, p.printD, 0, p.base));
   if (textMask) add(A.text, pixelBody(textMask.M, textMask.w, textMask.h, textMask.px, 0, -p.strip, p.base, p.base + p.textH));
   return [...out].map(([fil, list]) => ({ fil, body: mergeBodies(list) }));
@@ -854,9 +863,9 @@ const busy = (on, t) => { $('busy').classList.toggle('on', on); if (t) $('busy')
 const nextFrame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
 
 // ---------- params ----------
-const NUM = ['areaKm','printW','printD','bed','pitch','vex','base','floor','smooth','interval','firstContour','sheetLayers','layer','riverW','streamW','carve','recess','minLake','trailW','trailH','trailDepth','poiSize','poiH','osmMax','strip','textH','textScale'];
+const NUM = ['areaKm','printW','printD','bed','pitch','vex','base','floor','smooth','interval','firstContour','sheetLayers','layer','riverW','streamW','carve','recess','minLake','trailW','trailH','trailDepth','poiSize','poiH','poiCenterSize','poiCenterH','osmMax','strip','textH','textScale'];
 const BOOL = ['wRivers','wStreams','wLakes','wRiverAreas','wFlat','wFlow','wWidthTag'];
-const SAVE = [...NUM, ...BOOL, 'addrLabel','coords','line1','line2','trailMode','poiShape','wptPoi','poiNames','poiCenter','poiCenterShape','addr'];
+const SAVE = [...NUM, ...BOOL, 'addrLabel','coords','line1','line2','trailMode','poiShape','wptPoi','poiNames','poiCenter','poiCenterShape','poiCenterName','addr','fillBed'];
 let line2Auto = true;
 try { const s = JSON.parse(localStorage.getItem('reliefMaker') || 'null'); if (s) { for (const k of SAVE) if (k in s && $(k)) { const el = $(k); if (el.type === 'checkbox') el.checked = s[k]; else el.value = s[k]; } line2Auto = s.line2Auto !== false; } } catch (e) {}
 function save() { try { const s = { line2Auto }; for (const k of SAVE) { const el = $(k); s[k] = el.type === 'checkbox' ? el.checked : el.value; } localStorage.setItem('reliefMaker', JSON.stringify(s)); } catch (e) {} }
@@ -974,7 +983,7 @@ function filSelect(value, onChange, none) {
 }
 function renderColors() {
   const real = COL.mode !== 'four', fsm = COL.mode === 'fs', sat = imode() === 'real', pal = PAL();
-  renderPresets(); renderLabelColor();
+  renderPresets(); renderLabelColor(); if (typeof renderCpoiColor === 'function') renderCpoiColor();
   if (fsm) fsReset();
   $('filTitle').textContent = fsm ? 'Your colors (Full Spectrum)' : real ? 'Your colors' : 'Your 4 filaments';
   $('filHint').textContent = fsm
@@ -1169,7 +1178,7 @@ function renderFeatLists() {
   for (const t of FEAT.trails) {
     const cb = mk('input', { type: 'checkbox', checked: t.on, title: 'Print this trail' }); cb.addEventListener('change', () => { t.on = cb.checked; featsChanged(false); });
     const nm = mk('input', { type: 'text', value: t.name }); nm.addEventListener('input', () => { t.name = nm.value; saveFeat(); drawFeatures(); });
-    const fit = mk('button', { type: 'button', className: 'ib', textContent: '⌖', title: 'Enlarge the map until this trail fits (center stays)' }); fit.addEventListener('click', () => { const km = growToFit(t.segs.flat()); setStatus(km ? `Map enlarged to ${km.toFixed(1)} km.` : 'This trail already fits.'); });
+    const fit = mk('button', { type: 'button', className: 'ib', textContent: '⌖', title: 'Fit the map to this trail (center stays)' }); fit.addEventListener('click', () => { const km = growToFit(t.segs.flat(), true); setStatus(km ? `Map fitted to the trail: ${km.toFixed(1)} km, ${$('printW').value} × ${$('printD').value} mm.` : 'This trail already fits.'); });
     const del = mk('button', { type: 'button', className: 'ib x', textContent: '×' }); del.addEventListener('click', () => { FEAT.trails = FEAT.trails.filter(x => x !== t); featsChanged(); });
     tl.append(mk('div', { className: 'item' }, cb, nm, mk('span', { className: 'meta', textContent: trailKm(t).toFixed(1) + ' km' }), fit, del));
   }
@@ -1202,18 +1211,37 @@ function fitTo(pts) {
   const lat = (s + n) / 2, lon = (w + e) / 2, p = params();
   const area = Math.max((e - w) * kmLon(lat), (n - s) * KM_LAT * p.printW / p.printD) * 1.15;
   $('coords').value = `${lat.toFixed(5)}, ${lon.toFixed(5)}`; $('areaKm').value = Math.max(1, Math.min(200, area)).toFixed(1);
-  onLocationChange();
+  if (!growToFit(pts, true)) onLocationChange();
 }
 
 // enlarge the map around the current center until every point fits (+6 % margin); returns the new width or 0
-function growToFit(pts) {
+// fit trails: map area around the center so every point fits; with "fill the bed" the print also
+// grows to the bed (5 mm margin, label strip included) in the trail's width/depth ratio.
+// exact = zoom to the trail (import, ⌖); otherwise the area only grows (drawing)
+function growToFit(pts, exact = false) {
   const p = params(), kl = kmLon(p.lat); let dx = 0, dy = 0;
   for (const [la, lo] of pts) { dx = Math.max(dx, Math.abs(lo - p.lon) * kl); dy = Math.max(dy, Math.abs(la - p.lat) * KM_LAT); }
-  const need = Math.min(200, Math.max(2 * dx, 2 * dy * p.printW / p.printD) * 1.06);
-  if (need <= p.areaKm + 1e-6) return 0;
-  $('areaKm').value = (Math.ceil(need * 10) / 10).toFixed(1); onLocationChange();
-  return +$('areaKm').value;
+  let W = p.printW, D = p.printD, sized = false;
+  if ($('fillBed').checked && dx + dy > 0) {
+    const maxW = Math.min(300, p.bed - 10), maxD = Math.min(300, p.bed - 10 - (p.strip || 0)), a = Math.max(dx, 0.05) / Math.max(dy, 0.05);
+    if (a >= maxW / maxD) { W = maxW; D = Math.max(60, Math.min(maxD, Math.round(maxW / a))); } else { D = maxD; W = Math.max(60, Math.min(maxW, Math.round(maxD * a))); }
+    W = Math.round(W); D = Math.round(D); sized = W !== p.printW || D !== p.printD;
+  }
+  const need = Math.min(200, Math.max(2 * dx, 2 * dy * W / D) * 1.06), cur = p.areaKm;
+  const km = exact ? Math.max(1, Math.ceil(need * 10) / 10) : Math.max(cur, Math.ceil(need * 10) / 10);
+  if (!sized && Math.abs(km - p.areaKm) < 1e-6) return 0;
+  if (sized) { $('printW').value = W; $('printD').value = D; }
+  $('areaKm').value = km.toFixed(1); save(); onLocationChange();
+  return km;
 }
+$('fillBedBtn').addEventListener('click', () => {
+  const on = FEAT.trails.filter(t => t.on).flatMap(t => t.segs.flat());
+  if (on.length) { const c = $('fillBed').checked; $('fillBed').checked = true; growToFit(on, true); $('fillBed').checked = c; }
+  else { const p = params(), maxW = Math.min(300, p.bed - 10), maxD = Math.min(300, p.bed - 10 - (p.strip || 0)), r = p.printD / p.printW;
+    const W = Math.round(Math.min(maxW, maxD / r)), D = Math.round(W * r);
+    $('areaKm').value = (p.areaKm * W / p.printW).toFixed(1); $('printW').value = W; $('printD').value = D; save(); onLocationChange(); }
+  setStatus(`Print size ${$('printW').value} × ${$('printD').value} mm · area ${$('areaKm').value} km.`);
+});
 // --- track file import ---
 function decimate(pts, minM = 4) {
   pts = pts.filter(q => isFinite(q[0]) && isFinite(q[1]) && Math.abs(q[0]) <= 90);
@@ -1278,8 +1306,8 @@ $('impFile').addEventListener('change', async () => {
     if (all.length) {
       const [[s, w], [n, e]] = areaBounds(params());
       if (!all.some(([la, lo]) => la > s && la < n && lo > w && lo < e)) { fitTo(all); setStatus(`Imported ${nt} trail(s), ${np} waypoint(s) — moved the print area onto the track.`); return; }
-      const km = growToFit(all);
-      if (km) { setStatus(`Imported ${nt} trail(s) — map enlarged to ${km.toFixed(1)} km so the whole track fits (center unchanged).`); return; }
+      const km = growToFit(all, true);
+      if (km) { setStatus(`Imported ${nt} trail(s) — map set to ${km.toFixed(1)} km and ${$('printW').value} × ${$('printD').value} mm so the whole track fits (center unchanged).`); return; }
     }
     setStatus(`Imported ${nt} trail(s)${np ? `, ${np} waypoint(s) as POIs` : ''}.`);
   } catch (e) { console.error(e); setStatus('Import failed: ' + e.message, true); }
@@ -1592,7 +1620,7 @@ terrainMat.onBeforeCompile = sh => {
     .replace('#include <color_fragment>', '#include <color_fragment>\n{ vec3 col = texture2D(uZTex, vec2(clamp(vP.z / uZMax, 0.0, 1.0), 0.5)).rgb;\n if (uUseCell > 0.5 && vTop > 0.5) { vec4 cc = texture2D(uCellTex, clamp(vP.xy / uSize, 0.0, 0.9999)); if (cc.a > 0.5) col = cc.rgb; }\n if (vWater > 0.5) col = uBlue; if (vTrail > 0.5) col = uTrail; diffuseColor.rgb = col; }');
 };
 const baseMat = new THREE.MeshStandardMaterial({ roughness: 0.7 });
-const poiMat = new THREE.MeshStandardMaterial({ roughness: 0.5, metalness: 0.1 });
+const poiMat = new THREE.MeshStandardMaterial({ roughness: 0.5, metalness: 0.1 }), cpoiMat = new THREE.MeshStandardMaterial({ roughness: 0.5, metalness: 0.1 });
 let labelTex = null;
 const labelMat = new THREE.MeshStandardMaterial({ transparent: true, alphaTest: 0.5, roughness: 0.8 });
 
@@ -1614,11 +1642,12 @@ let state = { dem: null, water: null, img: null, fitted: false, lastModel: null,
 function centerPoi() {
   if (!$('poiCenter').checked) return [];
   const p = params();
-  return [{ lat: p.lat, lon: p.lon, shape: $('poiCenterShape').value, name: (lastPlace && lastPlace.short) || $('addr').value.trim() || 'Center' }];
+  return [{ lat: p.lat, lon: p.lon, shape: $('poiCenterShape').value, center: true, size: p.poiCenterSize, h: p.poiCenterH,
+    name: $('poiCenterName').value.trim() || (lastPlace && lastPlace.short) || $('addr').value.trim() || 'Center' }];
 }
 const featsFor = () => ({ water: state.water, trails: FEAT.trails.filter(t => t.on), pois: [...FEAT.pois.filter(q => q.on), ...centerPoi()] });
 $('poiCenter').addEventListener('change', () => { $('rowPoiCenter').classList.toggle('hide', !$('poiCenter').checked); save(); renderFeatLists(); schedule(); });
-$('poiCenterShape').addEventListener('change', schedule);
+for (const id of ['poiCenterShape', 'poiCenterSize', 'poiCenterH', 'poiCenterName']) $(id).addEventListener('input', () => { save(); renderFeatLists(); schedule(); });
 $('rowPoiCenter').classList.toggle('hide', !$('poiCenter').checked);
 function colorCfg(p, m) {
   const A = PAL().asg, Cu = PAL(), im = imode();
@@ -1633,6 +1662,10 @@ function colorCfg(p, m) {
   if (COL.labelFil === 'custom' && COL.mode !== 'four') {
     const t = Math.max(0, ...PAL().fils.map(f => f.tool), ...state.virt.map(f => f.tool)) + 1;
     state.virt.push({ id: LABEL_ID, name: 'Label', color: COL.labelColor || '#ffffff', tool: t });
+  }
+  if (COL.cpoiFil === 'custom' && COL.mode !== 'four' && $('poiCenter').checked) {
+    const t = Math.max(0, ...PAL().fils.map(f => f.tool), ...state.virt.map(f => f.tool)) + 1;
+    state.virt.push({ id: CPOI_ID, name: 'Middle POI', color: COL.cpoiColor || '#ff3b30', tool: t });
   }
   if (COL.mode === 'fs') fsReset();
   return cfg;
@@ -1677,7 +1710,27 @@ function renderLabelColor() {
 }
 $('labelFil').addEventListener('change', () => { const v = $('labelFil').value; COL.labelFil = v === 'auto' || v === 'custom' ? v : +v; saveCOL(); renderLabelColor(); schedule(); });
 for (const ev of ['input', 'change']) $('labelColor').addEventListener(ev, () => { COL.labelColor = $('labelColor').value; saveCOL(); renderLabelColor(); schedule(); });
-const asgIds = () => { const A = PAL().asg; return { base: +A.base, water: +A.water, trail: +A.trail, poi: +A.poi, text: labelId() }; };
+// middle POI color: automatic (= POI filament), one of your filaments, or a custom color
+const CPOI_ID = 8001;
+function cpoiId() {
+  const v = COL.cpoiFil ?? 'auto';
+  if (v === 'custom') return COL.mode === 'four' ? +PAL().asg.poi : CPOI_ID;
+  if (v !== 'auto' && PAL().fils.some(f => f.id === +v)) return +v;
+  return +PAL().asg.poi;
+}
+function renderCpoiColor() {
+  const sel = $('cpoiFil'), four = COL.mode === 'four'; sel.innerHTML = '';
+  sel.add(new Option('Automatic (like the other POIs)', 'auto'));
+  for (const f of PAL().fils) sel.add(new Option(filLabel(f), f.id));
+  const cu = new Option('Custom color', 'custom'); cu.disabled = four; sel.add(cu);
+  let v = COL.cpoiFil ?? 'auto'; if (v === 'custom' && four) v = 'auto'; if (v !== 'auto' && v !== 'custom' && !PAL().fils.some(f => f.id === +v)) v = 'auto';
+  sel.value = String(v); $('cpoiColor').value = COL.cpoiColor || '#ff3b30';
+  $('rowCpoiColor').classList.toggle('hide', v !== 'custom');
+  $('cpoiColorHint').textContent = COL.mode === 'fs' ? `≈ ${fsSnap(COL.cpoiColor || '#ff3b30').recipe}` : 'own filament slot in the 3MF';
+}
+$('cpoiFil').addEventListener('change', () => { const v = $('cpoiFil').value; COL.cpoiFil = v === 'auto' || v === 'custom' ? v : +v; saveCOL(); renderCpoiColor(); schedule(); });
+for (const ev of ['input', 'change']) $('cpoiColor').addEventListener(ev, () => { COL.cpoiColor = $('cpoiColor').value; saveCOL(); renderCpoiColor(); schedule(); });
+const asgIds = () => { const A = PAL().asg; return { base: +A.base, water: +A.water, trail: +A.trail, poi: +A.poi, cpoi: cpoiId(), text: labelId() }; };
 
 // ===== simple mode: your filaments in, 4 ready-made looks out =====
 COL.simple ??= { fils: [['Yellow', '#f6c21c'], ['Gray', '#a3a6aa'], ['Light blue', '#5fc3d6'], ['Black', '#17181b']], fs: false, ed: 'white', pick: -1 };
@@ -1687,7 +1740,7 @@ let EXPERT = false; try { EXPERT = localStorage.getItem('reliefMakerExpert') ===
 function applyExpert() {
   $('expert').checked = EXPERT; $('simple').classList.toggle('hide', EXPERT);
   if (EXPERT) $('rowRealContours').after($('sTune')); else $('sOpts').before($('sTune'));
-  for (const d of document.querySelectorAll('aside details')) d.classList.toggle('hide', !EXPERT && !['dLabel', 'dPoi', 'dTrails'].includes(d.id));
+  for (const d of document.querySelectorAll('aside details')) d.classList.toggle('hide', !EXPERT && !['dLabel', 'dPoi', 'dTrails', 'dPrint'].includes(d.id));
   if (!EXPERT) queueSuggestions(true);
 }
 $('expert').addEventListener('change', () => { EXPERT = $('expert').checked; try { localStorage.setItem('reliefMakerExpert', EXPERT ? '1' : '0'); } catch (e) {} applyExpert(); });
@@ -1846,7 +1899,7 @@ async function rebuildPreview() {
   for (const pr of m.prisms) {
     const b = prismBody(pr.shape, pr.X, pr.Y, pr.R, pr.z0, pr.z1);
     const gp = new THREE.BufferGeometry(); gp.setAttribute('position', new THREE.BufferAttribute(b.V, 3)); gp.setIndex(new THREE.BufferAttribute(b.F, 1));
-    const gn = gp.toNonIndexed(); gn.computeVertexNormals(); gp.dispose(); group.add(new THREE.Mesh(gn, poiMat));
+    const gn = gp.toNonIndexed(); gn.computeVertexNormals(); gp.dispose(); group.add(new THREE.Mesh(gn, pr.center ? cpoiMat : poiMat));
   }
   const bx = new THREE.Mesh(new THREE.BoxGeometry(p.printW, p.printD + p.strip, p.base), baseMat); bx.position.set(p.printW / 2, (p.printD - p.strip) / 2, p.base / 2); group.add(bx);
   if (p.strip > 0) {
@@ -1869,7 +1922,7 @@ async function rebuildPreview() {
     U.uCellTex.value = ct; U.uUseCell.value = 1;
   } else { U.uCellTex.value = blankTex(); U.uUseCell.value = 0; }
   U.uBlue.value.set(filColor(A.water)); U.uTrail.value.set(filColor(A.trail));
-  baseMat.color.set(filColor(A.base)); labelMat.color.set(filColor(labelId())); poiMat.color.set(filColor(A.poi));
+  baseMat.color.set(filColor(A.base)); labelMat.color.set(filColor(labelId())); poiMat.color.set(filColor(A.poi)); cpoiMat.color.set(filColor(cpoiId()));
   // POI name labels
   labelsEl.innerHTML = '';
   poiLabels = m.prisms.filter(pr => pr.name).map(pr => { const el = mk('div', { className: 'plabel', textContent: pr.name }); labelsEl.append(el); return { el, v: new THREE.Vector3(pr.X, pr.Y, pr.z1 + 0.5) }; });
@@ -1882,7 +1935,7 @@ async function rebuildPreview() {
   }
   // filaments in use
   const used = new Set(plan.slabs.map(s => s.fil)); if (plan.skin) for (const f of new Set(plan.skin.C)) used.add(f);
-  used.add(+A.base); if (W.some(Boolean)) used.add(+A.water); if (TM.some(Boolean)) used.add(+A.trail); if (m.prisms.length) used.add(+A.poi); if (p.strip > 0) used.add(labelId());
+  used.add(+A.base); if (W.some(Boolean)) used.add(+A.water); if (TM.some(Boolean)) used.add(+A.trail); if (m.prisms.some(pr => !pr.center)) used.add(+A.poi); if (m.prisms.some(pr => pr.center)) used.add(cpoiId()); if (p.strip > 0) used.add(labelId());
   const tools = [...new Set([...used].map(id => (filById(id) || {}).tool))].sort((a, b) => a - b);
   const fits = p.printW <= p.bed && p.printD + p.strip <= p.bed;
   const nT = FEAT.trails.filter(t => t.on).length, nP = m.prisms.length;
