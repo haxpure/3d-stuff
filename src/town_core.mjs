@@ -60,26 +60,30 @@ function findBuildingAt(osm, lat, lon, maxM = 35) {
 // All buildings belonging to an address: the numbered house plus unnumbered outbuildings
 // (garage, shed…) whose nearest house number is this one.
 const normNum = s => String(s || '').toLowerCase().replace(/\s+/g, '');
+const numMatch = (a, b) => { const n = normNum(b); return String(a || '').split(/[;,]/).some(x => normNum(x) === n); };
 function addressBuildings(osm, addr, withOutbuildings = true) {
   const kl = 111320 * Math.cos(addr.lat * Math.PI / 180);
   const dist = (a, b) => Math.hypot((a.lat - b.lat) * 111200, (a.lon - b.lon) * kl);
   const cent = osm.buildings.map(b => { let la = 0, lo = 0, n = 0; for (const q of b.rings[0] || []) { la += q.lat; lo += q.lon; n++; } return n ? { lat: la / n, lon: lo / n } : addr; });
   // 1. anchor = matching house-number point nearest to the geocoded spot
+  //    (a number only guessed from the typed text is searched farther: the geocoder may have found just the street)
   let anchor = null;
-  if (addr.hn) { let bd = 200; for (const h of osm.hnums) if (normNum(h.num) === normNum(addr.hn)) { const d = dist(h, addr); if (d < bd) { bd = d; anchor = h; } } }
+  if (addr.hn) { let bd = addr.hnGuess ? 600 : 250; for (const h of osm.hnums) if (numMatch(h.num, addr.hn)) { const d = dist(h, addr); if (d < bd) { bd = d; anchor = h; } } }
   const A = anchor || addr;
   // 2. main building(s): containing the anchor (several pieces possible), else nearest
   const set = new Set();
   osm.buildings.forEach((b, i) => { if (b.parts.some(pr => pointInRings(pr, A.lat, A.lon))) set.add(i); });
-  if (!set.size) { const i = findBuildingAt(osm, A.lat, A.lon, 30); if (i >= 0) set.add(i); }
-  if (!set.size || !withOutbuildings || !osm.hnums.length) return { set, anchor: !!anchor };
-  // 3. outbuildings: no house number of their own, nearest number point is the anchor, within 60 m
+  if (!set.size) { const i = findBuildingAt(osm, A.lat, A.lon, anchor ? 40 : 25); if (i >= 0) set.add(i); }
+  if (!set.size || !withOutbuildings || !anchor || !osm.hnums.length) return { set, anchor: !!anchor };
+  // 3. outbuildings: no house number of their own, nearest number point is the anchor,
+  //    and close to the main building (max. 20 m wall to wall)
+  const main = [...set], near = (i, maxM) => { for (const r of osm.buildings[i].rings) for (const q of r) for (const k of main) for (const mr of osm.buildings[k].rings) for (const w of mr) if (dist(q, w) < maxM) return true; return false; };
   const numbered = new Set();
   osm.hnums.forEach(h => osm.buildings.forEach((b, i) => { if (dist(cent[i], h) < 60 && b.parts.some(pr => pointInRings(pr, h.lat, h.lon))) numbered.add(i); }));
   osm.buildings.forEach((b, i) => {
     if (set.has(i) || numbered.has(i) || dist(cent[i], A) > 60) return;
     let best = null, bd = Infinity; for (const h of osm.hnums) { const d = dist(cent[i], h); if (d < bd) { bd = d; best = h; } }
-    if (best && dist(best, A) < 1) set.add(i);
+    if (best && dist(best, anchor) < 3 && near(i, 20)) set.add(i);
   });
   return { set, anchor: !!anchor };
 }

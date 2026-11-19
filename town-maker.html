@@ -55,6 +55,17 @@
   .role .fsc { display:flex; align-items:center; gap:6px; color:#c7cbd3; font-size:11px; white-space:nowrap; }
   .role .fsc input[type=color] { width:30px; height:24px; border:1px solid var(--line); border-radius:5px; background:none; padding:0; }
   .hide { display:none !important; }
+  h3 { font:600 11px Inter, sans-serif; color:var(--mute); text-transform:uppercase; letter-spacing:.7px; margin:12px 0 4px; }
+  .xsw { display:flex; align-items:center; justify-content:space-between; gap:10px; background:#0f1115; border:1px solid var(--line); border-radius:8px; padding:7px 10px; margin:0 0 10px; color:#c7cbd3; cursor:pointer; user-select:none; }
+  .xsw input { display:none; } .xsw .knob { width:34px; height:18px; border-radius:10px; background:#2a2f39; position:relative; flex:none; transition:background .15s; }
+  .xsw .knob::after { content:''; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:#8b919c; transition:left .15s, background .15s; }
+  .xsw input:checked + .knob { background:#5c4a0c; } .xsw input:checked + .knob::after { left:18px; background:var(--acc); }
+  #simple { border-top:1px solid var(--line); padding:8px 0; margin-top:8px; }
+  .opts { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px; }
+  .opt { background:#0f1115; border:1px solid var(--line); border-radius:8px; padding:6px; cursor:pointer; text-align:left; color:var(--text); font:inherit; width:100%; }
+  .opt:hover { border-color:#4a5160; } .opt.on { border-color:var(--acc); box-shadow:0 0 0 1px var(--acc) inset; }
+  .opt canvas { width:100%; height:auto; display:block; border-radius:5px; background:#1d2027; }
+  .opt b { display:block; font-size:12px; margin:5px 2px 1px; } .opt small { display:block; color:var(--mute); font-size:11px; margin:0 2px 2px; line-height:1.3; }
   .role i { width:14px; height:14px; border-radius:4px; border:1px solid #0006; display:block; }
   #status { margin-top:8px; color:var(--mute); min-height:18px; font-size:12px; }
   #status.err { color:#ff7a6b; }
@@ -75,6 +86,7 @@
 <aside>
   <h1>Town <span>Maker</span></h1>
   <div class="sub">Your street in 3D: buildings, roads and water on real terrain, as a multi-color 3MF.</div>
+  <label class="xsw"><span>Expert settings</span><input type="checkbox" id="expert"><span class="knob"></span></label>
   <div id="map"></div>
   <div class="row full"><label>Address or place
     <div class="addr"><input type="text" id="addr" placeholder="e.g. Hauptplatz 1, 8010 Graz" autocomplete="off"><button id="addrBtn" class="sec">Find</button></div></label>
@@ -86,6 +98,18 @@
   <button id="fetchBtn">Load area</button>
   <div id="status"></div>
 
+  <div id="simple">
+    <h3>Your filaments</h3>
+    <div class="hint">The colors loaded in your printer. The suggestions below are made from them.</div>
+    <div id="sFilSlot"></div>
+    <label class="check"><input type="checkbox" id="sFS"> I have the Full Spectrum pack (CMY + White/Gray)</label>
+    <div id="sEdSlot"></div>
+    <h3>Suggestions</h3>
+    <div id="sTuneSlot"></div>
+    <div class="hint" id="sHint">Load an area to see the suggestions.</div>
+    <div class="opts" id="sOpts"></div>
+  </div>
+
   <details open><summary>Print size</summary>
     <div class="row"><label>Map width (mm)</label><input type="number" id="printW" value="160" min="40" max="260"></div>
     <div class="row"><label>Map depth (mm)</label><input type="number" id="printD" value="180" min="40" max="260"></div>
@@ -93,17 +117,20 @@
     <div class="row"><label>Mesh resolution (mm)<small>ground detail: roads, trees, roofs. Smaller = finer, bigger file</small></label><input type="number" id="pitch" value="0.3" min="0.2" max="1.5" step="0.05"></div>
   </details>
 
-  <details open><summary>Buildings</summary>
+  <details open id="dHouse"><summary>Your house</summary>
+    <label class="check"><input type="checkbox" id="autoHouse" checked> Highlight the buildings at the searched address</label>
+    <label class="check"><input type="checkbox" id="outbuildings" checked> Include garages &amp; sheds on the same property</label>
+    <div class="hint">Tap any building in the 3D view to highlight it or remove the highlight.</div>
+    <div class="btns" style="grid-template-columns:1fr"><button id="clearHi" class="sec">Clear highlights</button></div>
+  </details>
+
+  <details open id="dBld"><summary>Buildings</summary>
     <label class="check"><input type="checkbox" id="buildings" checked> Show buildings</label>
     <div class="row"><label>Height scale</label><div class="rng"><input type="range" id="bex" min="1" max="4" step="0.1" value="1.5"><output></output></div></div>
     <div class="row"><label>Height if unknown (m)</label><input type="number" id="defH" value="7" min="2" max="60" step="0.5"></div>
     <div class="row"><label>Min. building height (mm)</label><input type="number" id="minBld" value="1.2" min="0.4" max="10" step="0.2"></div>
     <div class="row"><label>Roof pitch<small>0 = all roofs flat</small></label><div class="rng"><input type="range" id="roofPitch" min="0" max="50" step="1" value="35"><output></output></div></div>
     <div class="row"><label>Pitched roofs up to width (m)<small>wider buildings stay flat</small></label><input type="number" id="roofMaxW" value="24" min="4" max="80" step="1"></div>
-    <label class="check"><input type="checkbox" id="autoHouse" checked> Highlight the buildings at the searched address</label>
-    <label class="check"><input type="checkbox" id="outbuildings" checked> Include garages &amp; sheds on the same property</label>
-    <div class="hint">Click any building in the 3D view to highlight it or remove the highlight.</div>
-    <div class="btns" style="grid-template-columns:1fr"><button id="clearHi" class="sec">Clear highlights</button></div>
   </details>
 
   <details open><summary>Trees &amp; fields</summary>
@@ -132,7 +159,7 @@
     <div class="row"><label>Inlay depth (mm)<small>roads and water</small></label><input type="number" id="carve" value="0.6" min="0.4" max="2" step="0.1"></div>
   </details>
 
-  <details open><summary>Label strip</summary>
+  <details open id="dLabel"><summary>Label strip</summary>
     <div class="row full"><label>Name<input type="text" id="line1" value="GRAZ · HAUPTPLATZ"></label></div>
     <div class="row full"><label>Second line <small>auto-filled with coordinates until you edit it</small><input type="text" id="line2" value=""></label></div>
     <div class="row"><label>Strip depth (mm)<small>0 = no label</small></label><input type="number" id="strip" value="16" min="0" max="40" step="1"></div>
@@ -140,16 +167,16 @@
     <div class="row"><label>Text size</label><div class="rng"><input type="range" id="textScale" min="0.5" max="1.4" step="0.05" value="1"><output></output></div></div>
   </details>
 
-  <details open><summary>Filaments &amp; tools</summary>
+  <details open id="dFil"><summary>Filaments &amp; tools</summary>
     <div class="row"><label>Mode</label><select id="tMode"><option value="four">4 colors (fixed)</option><option value="fs">Full Spectrum pack (CMY + W/G)</option></select></div>
-    <div class="row hide" id="tEdRow"><label>Filament pack<small>T1 Cyan · T2 Magenta · T3 Yellow · T4 White / Gray</small></label><select id="tEd"><option value="white">Full Spectrum White Edition</option><option value="gray">Full Spectrum Gray Edition</option></select></div>
-    <div id="tTune">
+    <div id="tEdHome"></div><div class="row hide" id="tEdRow"><label>Filament pack<small>T1 Cyan · T2 Magenta · T3 Yellow · T4 White / Gray</small></label><select id="tEd"><option value="white">Full Spectrum White Edition</option><option value="gray">Full Spectrum Gray Edition</option></select></div>
+    <div id="tTuneHome"></div><div id="tTune">
       <div class="row"><label>Hue</label><div class="rng"><input type="range" id="tHue" min="-180" max="180" step="5" value="0"><output></output></div></div>
       <div class="row"><label>Contrast</label><div class="rng"><input type="range" id="tCon" min="50" max="200" step="5" value="100"><output></output></div></div>
       <div class="hint" id="tTuneHint">Shifts the wanted colors before they are matched to the pack's mixes.</div>
     </div>
     <div class="hint hide" id="tFsHint">Pick any color per part. It is moved to the nearest mix the pack can make (approximate); every mix gets its own placeholder filament from T5. Set up the mixes in Snapmaker Orca → Color Mixing.</div>
-    <div class="pal">
+    <div id="palHome"></div><div class="pal" id="pal">
       <label>T1<input type="color" id="col1" value="#f6c21c"></label>
       <label>T2<input type="color" id="col2" value="#a3a6aa"></label>
       <label>T3<input type="color" id="col3" value="#5fc3d6"></label>
@@ -322,6 +349,14 @@ window.FS = (() => {
     'POI in the middle of the map (your address)': 'POI in der Kartenmitte (deine Adresse)', 'Middle POI shape': 'Form des Mitte-POI', 'Center': 'Mitte',
     'Enlarge the map until this trail fits (center stays)': 'Karte vergrößern, bis dieser Weg ganz draufpasst (Mitte bleibt)', 'This trail already fits.': 'Dieser Weg passt schon ganz drauf.',
     'Max. colors': 'Max. Farben', 'the most used colors / mixes are kept': 'die am meisten genutzten Farben / Mischungen bleiben',
+    // --- Town Maker simple mode ---
+    'Your house': 'Dein Haus', 'Tap any building in the 3D view to highlight it or remove the highlight.': 'Tippe ein Gebäude in der 3D-Ansicht an, um es zu markieren oder die Markierung zu entfernen.',
+    'Load an area to see the suggestions.': 'Lade ein Gebiet, um die Vorschläge zu sehen.',
+    'Shifts the wanted colors before they are matched to your filaments: changes which filament each part gets.': 'Verschiebt die gewünschten Farben, bevor sie deinen Filamenten zugeordnet werden: ändert, welches Filament jeder Teil bekommt.',
+    'Natural': 'Natürlich', 'Green meadows, light houses, dark roads, blue water. Your house stands out.': 'Grüne Wiesen, helle Häuser, dunkle Straßen, blaues Wasser. Dein Haus sticht heraus.',
+    'Architecture model': 'Architekturmodell', 'Light like a white model, only your house in color. Few color swaps.': 'Hell wie ein weißes Modell, nur dein Haus in Farbe. Wenige Farbwechsel.',
+    'Map style': 'Kartenstil', 'Like a city map: light ground, gray houses, colored roads, blue water.': 'Wie ein Stadtplan: heller Boden, graue Häuser, farbige Straßen, blaues Wasser.',
+    'Night': 'Nacht', 'Dark ground, light houses and roads, your house glows.': 'Dunkler Boden, helle Häuser und Straßen, dein Haus leuchtet.',
     'Expert settings': 'Experten-Einstellungen', 'Your filaments': 'Deine Filamente', 'The colors loaded in your printer. The suggestions below are made from them.': 'Die Farben, die in deinem Drucker geladen sind. Daraus werden die Vorschläge unten erstellt.',
     'I have the Full Spectrum pack (CMY + White/Gray)': 'Ich habe das Full-Spectrum-Set (CMY + Weiß/Grau)', 'Pack': 'Set', 'White Edition': 'White Edition', 'Gray Edition': 'Gray Edition',
     'Suggestions': 'Vorschläge', 'Load terrain to see the suggestions.': 'Lade das Gelände, um die Vorschläge zu sehen.', 'Smooth gradient': 'Weicher Verlauf',
@@ -363,7 +398,7 @@ window.FS = (() => {
     [/^3MF: (\d+) parts, ([\d.]+) M triangles, ([\d.]+) MB\. Load these filaments: /, '3MF: $1 Teile, $2 Mio. Dreiecke, $3 MB. Diese Filamente laden: '],
     [/^3MF: (\d+) parts, ([\d.]+) M triangles, ([\d.]+) MB\. /, '3MF: $1 Teile, $2 Mio. Dreiecke, $3 MB. '],
     [/Loaded (\d+) buildings \((.+?)\)\./, '$1 Gebäude geladen ($2).'],
-    [/Highlighted (\d+) buildings? at the center point\./, '$1 Gebäude beim Mittelpunkt markiert.'], [/Highlighted (\d+) buildings? at (.+?)( \(house number not in map data, used the nearest building\))?\.$/, (m, n, w, h) => `${n} Gebäude bei ${w} markiert${h ? ' (Hausnummer nicht in den Kartendaten, nächstes Gebäude verwendet)' : ''}.`],
+    [/Highlighted (\d+) buildings? at the center point\./, '$1 Gebäude beim Mittelpunkt markiert.'], [/Highlighted (\d+) buildings? at (.+?)(?: \(house number (\S+) (found|not in map data, used the nearest building — tap the right one in the 3D view)\))?\.$/, (m, n, w, hn, k) => `${n} Gebäude bei ${w} markiert${hn ? (k === 'found' ? ` (Hausnummer ${hn} gefunden)` : ` (Hausnummer ${hn} nicht in den Kartendaten, nächstes Gebäude verwendet – tippe in der 3D-Ansicht auf das richtige)`) : ''}.`],
     [/No building found at the center point — click one in the 3D view to highlight it\./, 'Kein Gebäude beim Mittelpunkt – klicke eines in der 3D-Ansicht an, um es zu markieren.'],
     [/No building found at (.+?) — click one in the 3D view to highlight it\./, 'Kein Gebäude bei $1 gefunden – klicke eines in der 3D-Ansicht an, um es zu markieren.'],
     [/^Elevation (.+?) m · scale 1:/, 'Höhe $1 m · Maßstab 1:'], [/^Scale 1:/, 'Maßstab 1:'], [/ · elevation (-?\d)/, ' · Höhe $1'],
@@ -1813,26 +1848,30 @@ function findBuildingAt(osm, lat, lon, maxM = 35) {
 // All buildings belonging to an address: the numbered house plus unnumbered outbuildings
 // (garage, shed…) whose nearest house number is this one.
 const normNum = s => String(s || '').toLowerCase().replace(/\s+/g, '');
+const numMatch = (a, b) => { const n = normNum(b); return String(a || '').split(/[;,]/).some(x => normNum(x) === n); };
 function addressBuildings(osm, addr, withOutbuildings = true) {
   const kl = 111320 * Math.cos(addr.lat * Math.PI / 180);
   const dist = (a, b) => Math.hypot((a.lat - b.lat) * 111200, (a.lon - b.lon) * kl);
   const cent = osm.buildings.map(b => { let la = 0, lo = 0, n = 0; for (const q of b.rings[0] || []) { la += q.lat; lo += q.lon; n++; } return n ? { lat: la / n, lon: lo / n } : addr; });
   // 1. anchor = matching house-number point nearest to the geocoded spot
+  //    (a number only guessed from the typed text is searched farther: the geocoder may have found just the street)
   let anchor = null;
-  if (addr.hn) { let bd = 200; for (const h of osm.hnums) if (normNum(h.num) === normNum(addr.hn)) { const d = dist(h, addr); if (d < bd) { bd = d; anchor = h; } } }
+  if (addr.hn) { let bd = addr.hnGuess ? 600 : 250; for (const h of osm.hnums) if (numMatch(h.num, addr.hn)) { const d = dist(h, addr); if (d < bd) { bd = d; anchor = h; } } }
   const A = anchor || addr;
   // 2. main building(s): containing the anchor (several pieces possible), else nearest
   const set = new Set();
   osm.buildings.forEach((b, i) => { if (b.parts.some(pr => pointInRings(pr, A.lat, A.lon))) set.add(i); });
-  if (!set.size) { const i = findBuildingAt(osm, A.lat, A.lon, 30); if (i >= 0) set.add(i); }
-  if (!set.size || !withOutbuildings || !osm.hnums.length) return { set, anchor: !!anchor };
-  // 3. outbuildings: no house number of their own, nearest number point is the anchor, within 60 m
+  if (!set.size) { const i = findBuildingAt(osm, A.lat, A.lon, anchor ? 40 : 25); if (i >= 0) set.add(i); }
+  if (!set.size || !withOutbuildings || !anchor || !osm.hnums.length) return { set, anchor: !!anchor };
+  // 3. outbuildings: no house number of their own, nearest number point is the anchor,
+  //    and close to the main building (max. 20 m wall to wall)
+  const main = [...set], near = (i, maxM) => { for (const r of osm.buildings[i].rings) for (const q of r) for (const k of main) for (const mr of osm.buildings[k].rings) for (const w of mr) if (dist(q, w) < maxM) return true; return false; };
   const numbered = new Set();
   osm.hnums.forEach(h => osm.buildings.forEach((b, i) => { if (dist(cent[i], h) < 60 && b.parts.some(pr => pointInRings(pr, h.lat, h.lon))) numbered.add(i); }));
   osm.buildings.forEach((b, i) => {
     if (set.has(i) || numbered.has(i) || dist(cent[i], A) > 60) return;
     let best = null, bd = Infinity; for (const h of osm.hnums) { const d = dist(cent[i], h); if (d < bd) { bd = d; best = h; } }
-    if (best && dist(best, A) < 1) set.add(i);
+    if (best && dist(best, anchor) < 3 && near(i, 20)) set.add(i);
   });
   return { set, anchor: !!anchor };
 }
@@ -2210,6 +2249,7 @@ const busy = (on, t) => { $('busy').classList.toggle('on', on); if (t) $('busy')
 const nextFrame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
 
 // ---------- roles / tools ----------
+let EXPERT = false; try { EXPERT = localStorage.getItem('townMakerExpert') === '1'; } catch (e) {}
 const ROLES = [['house', 'Highlighted (your house)', 1, '#f6c21c'], ['buildings', 'Buildings', 2, '#d9d9d4'], ['trees', 'Trees', 2, '#4f7a3a'], ['rail', 'Railways', 1, '#c0392b'], ['roads', 'Roads & paths', 4, '#55565a'], ['water', 'Water', 3, '#2c8fd6'], ['ground', 'Ground', 2, '#b4ad98'], ['base', 'Base', 4, '#4b4d55'], ['text', 'Label text', 1, '#f6c21c']];
 for (const [k, label, t, c] of ROLES) {
   const d = document.createElement('div'); d.className = 'role';
@@ -2229,8 +2269,9 @@ function refreshRoles() {
   }
   for (const [k] of ROLES) { $('tool_' + k).classList.toggle('hide', fs); $('fsc_' + k).classList.toggle('hide', !fs); }
   document.querySelector('.pal').classList.toggle('hide', fs); $('tEdRow').classList.toggle('hide', !fs); $('tFsHint').classList.toggle('hide', !fs);
-  for (const id of ['tHue', 'tCon']) $(id).disabled = !fs;
-  $('tTuneHint').textContent = fs ? "Shifts the wanted colors before they are matched to the pack's mixes." : 'Only with the Full Spectrum pack: fixed filaments cannot change their color.';
+  const simple = !EXPERT;
+  for (const id of ['tHue', 'tCon']) $(id).disabled = !fs && !simple;
+  $('tTuneHint').textContent = fs ? "Shifts the wanted colors before they are matched to the pack's mixes." : simple ? 'Shifts the wanted colors before they are matched to your filaments: changes which filament each part gets.' : 'Only with the Full Spectrum pack: fixed filaments cannot change their color.';
 }
 const toolColor = k => (roleInfo[k] || { color: '#888888' }).color;
 
@@ -2281,7 +2322,7 @@ const marker = L.circleMarker([0, 0], { radius: 4, color: '#f6c21c' }).addTo(map
 function areaBounds(p) { const { areaKmY } = geom(p); const dLat = areaKmY / 2 / KM_LAT, dLon = p.areaKm / 2 / kmLon(p.lat); return [[p.lat - dLat, p.lon - dLon], [p.lat + dLat, p.lon + dLon]]; }
 function updateMap(fit) { const p = params(); const b = areaBounds(p); rect.setBounds(b); marker.setLatLng([p.lat, p.lon]); if (fit) map.fitBounds(b, { padding: [10, 10] }); }
 updateMap(true);
-map.on('click', e => { state.addr = null; $('coords').value = `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`; onLocationChange(); });
+map.on('click', e => { state.addr = null; try { localStorage.removeItem('townMakerAddr'); } catch (e) {} $('coords').value = `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`; onLocationChange(); });
 
 // ---------- address search ----------
 async function geocode(q) {
@@ -2309,8 +2350,13 @@ async function geocode(q) {
   return out;
 }
 
+// house number typed by the user (1–3 digits, optional letter or /n; 4–5 digit postcodes are skipped)
+function guessHn(q) { const m = String(q || '').match(/(?:^|[\s,])(\d{1,3}(?:\s?[a-zA-Z])?(?:\/\d{1,3}[a-zA-Z]?)?)(?=[\s,]|$)/); return m ? m[1].replace(/\s+/g, '') : ''; }
+let lastQuery = '';
 function applyPlace(pl, btn) {
-  state.addr = { lat: pl.lat, lon: pl.lon, hn: pl.hn || '', name: pl.name };
+  const g = pl.hn ? '' : guessHn(lastQuery);
+  state.addr = { lat: pl.lat, lon: pl.lon, hn: pl.hn || g, hnGuess: !pl.hn && !!g, name: pl.name };
+  try { localStorage.setItem('townMakerAddr', JSON.stringify({ ...state.addr, coords: `${pl.lat.toFixed(5)}, ${pl.lon.toFixed(5)}` })); } catch (e) {}
   $('coords').value = `${pl.lat.toFixed(5)}, ${pl.lon.toFixed(5)}`;
   if ($('addrLabel').checked) $('line1').value = pl.short.toUpperCase();
   for (const b of $('addrResults').children) b.classList.toggle('on', b === btn);
@@ -2318,6 +2364,7 @@ function applyPlace(pl, btn) {
 }
 async function addrSearch() {
   const q = $('addr').value.trim(); if (!q) return;
+  lastQuery = q;
   const ll = parseCoords(q);
   if (ll && /^[\s\d.,°'′"″NSEWnsew+-]+$/.test(q)) { $('coords').value = `${ll[0].toFixed(5)}, ${ll[1].toFixed(5)}`; $('addrResults').innerHTML = ''; onLocationChange(); return; }
   $('addrBtn').disabled = true; setStatus('Looking up address…');
@@ -2477,6 +2524,8 @@ new ResizeObserver(resize).observe(view); resize();
 (function loop() { requestAnimationFrame(loop); controls.update(); renderer.render(scene, camera); })();
 
 let state = { dem: null, osm: null, highlight: new Set(), model: null, fitted: false, addr: null };
+// the searched address survives a page reload (phones reload tabs often)
+try { const a = JSON.parse(localStorage.getItem('townMakerAddr') || 'null'); if (a && a.coords === $('coords').value.trim()) state.addr = a; } catch (e) {}
 
 function toGeom(body) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(body.V, 3)); g.setIndex(new THREE.BufferAttribute(body.F, 1)); g.computeVertexNormals(); return g;
@@ -2497,6 +2546,7 @@ async function rebuildPreview() {
     const lm = new THREE.Mesh(new THREE.PlaneGeometry(p.printW, p.strip), labelMat); lm.position.set(p.printW / 2, -p.strip / 2, p.base + p.textH); group.add(lm);
   }
   updateColors();
+  if (!EXPERT) renderSuggestions();
   const bh = p.bed / 2, cx = p.printW / 2, cy = (p.printD - p.strip) / 2;
   bedLine.geometry.setFromPoints([new THREE.Vector3(cx - bh, cy - bh, 0), new THREE.Vector3(cx + bh, cy - bh, 0), new THREE.Vector3(cx + bh, cy + bh, 0), new THREE.Vector3(cx - bh, cy + bh, 0)]);
   if (!state.fitted) { controls.target.set(cx, cy, m.zmax / 4); camera.position.set(cx - p.printW * 0.3, cy - p.printD * 1.4, Math.max(p.printW, p.printD) * 1.05); state.fitted = true; }
@@ -2565,21 +2615,136 @@ function highlightAddress() {
   state.highlight = set;
   const where = state.addr ? (state.addr.name || 'the address') : 'the center point';
   if (!set.size) return ` No building found at ${where} — click one in the 3D view to highlight it.`;
-  return ` Highlighted ${set.size} building${set.size > 1 ? 's' : ''} at ${where}` + (a.hn && !anchor ? ' (house number not in map data, used the nearest building)' : '') + '.';
+  return ` Highlighted ${set.size} building${set.size > 1 ? 's' : ''} at ${where}` + (a.hn && anchor ? ` (house number ${a.hn} found)` : a.hn ? ` (house number ${a.hn} not in map data, used the nearest building — tap the right one in the 3D view)` : '') + '.';
 }
 $('autoHouse').addEventListener('change', () => { if ($('autoHouse').checked) { const m = highlightAddress(); setStatus(m.trim()); } else state.highlight.clear(); rebuildPreview(); });
 $('outbuildings').addEventListener('change', () => { save(); if ($('autoHouse').checked) { setStatus(highlightAddress().trim()); rebuildPreview(); } });
 let locTimer;
 function onLocationChange() { if ($('coords').value.trim() && !parseCoords($('coords').value)) { $('addr').value = $('coords').value; $('coords').value = ''; addrSearch(); return; } updateLine2(); updateMap(true); save(); clearTimeout(locTimer); locTimer = setTimeout(loadArea, 700); }
-$('fetchBtn').addEventListener('click', loadArea);
-$('coords').addEventListener('change', () => { state.addr = null; onLocationChange(); });
+// "Load area" first looks up a newly typed address
+$('fetchBtn').addEventListener('click', () => { const q = $('addr').value.trim(); if (q && q !== lastQuery) addrSearch(); else loadArea(); });
+$('coords').addEventListener('change', () => { state.addr = null; try { localStorage.removeItem('townMakerAddr'); } catch (e) {} onLocationChange(); });
 for (const id of ['areaM', 'printW', 'printD']) $(id).addEventListener('change', () => onLocationChange());
 let pvTimer;
 const schedule = () => { save(); clearTimeout(pvTimer); pvTimer = setTimeout(() => rebuildPreview().catch(e => setStatus(e.message, true)), 150); };
 for (const id of [...NUM.filter(k => !['areaM','printW','printD'].includes(k)), 'line1', 'line2', ...BOOL.filter(k => !['autoHouse','addrLabel'].includes(k))]) $(id).addEventListener('input', schedule);
 for (const id of ['autoHouse', 'addrLabel']) $(id).addEventListener('change', save);
-$('clearHi').addEventListener('click', () => { $('autoHouse').checked = false; save(); });
-for (const id of ['col1','col2','col3','col4','tMode','tEd','tHue','tCon', ...ROLES.map(r => 'tool_' + r[0]), ...ROLES.map(r => 'rc_' + r[0])]) $(id).addEventListener('input', () => { save(); updateColors(); });
+for (const id of ['col1','col2','col3','col4','tMode','tEd','tHue','tCon', ...ROLES.map(r => 'tool_' + r[0]), ...ROLES.map(r => 'rc_' + r[0])]) for (const ev of ['input', 'change']) $(id).addEventListener(ev, () => {
+  if (id === 'tMode') $('sFS').checked = $('tMode').value === 'fs';
+  save(); if (!EXPERT && /^(col\d|tMode|tEd|tHue|tCon)$/.test(id)) applyPick(SIMPLE.pick); else { updateColors(); drawThumbs(); } });
+
+// ---------- simple mode: pick your filaments, choose one of 4 looks ----------
+// each look = a wanted color per part. Full Spectrum: the color is mixed from the pack.
+// 4 fixed colors: every part gets the closest filament, with a few rules so important parts stay apart.
+const SCHEMES = [
+  { title: 'Natural', desc: 'Green meadows, light houses, dark roads, blue water. Your house stands out.',
+    t: { house: '#e84a2f', buildings: '#ebe7df', trees: '#3d6b35', rail: '#8a3b2b', roads: '#55565a', water: '#3a8fd0', ground: '#9aa86a', base: '#2b2d33', text: '#f2f2ef' } },
+  { title: 'Architecture model', desc: 'Light like a white model, only your house in color. Few color swaps.',
+    t: { house: '#f6a21c', buildings: '#f7f7f4', trees: '#c9cac6', rail: '#9a9a98', roads: '#bdbdb9', water: '#8fc6e6', ground: '#f0efea', base: '#3a3c42', text: '#f0efea' },
+    diff: { buildings: [], trees: [], rail: [] } },
+  { title: 'Map style', desc: 'Like a city map: light ground, gray houses, colored roads, blue water.',
+    t: { house: '#d8342c', buildings: '#a9a29b', trees: '#7fb069', rail: '#5b5b5b', roads: '#f2c94c', water: '#5aa9e6', ground: '#efe9dc', base: '#efe9dc', text: '#2b2d33' } },
+  { title: 'Night', desc: 'Dark ground, light houses and roads, your house glows.',
+    t: { house: '#f6c21c', buildings: '#d8d8d4', trees: '#3a4a3e', rail: '#c0392b', roads: '#9a9da4', water: '#2c6fb0', ground: '#1e2024', base: '#111214', text: '#f6c21c' } },
+];
+const DIFF = { buildings: ['ground'], roads: ['ground'], water: ['ground'], trees: ['ground'], rail: ['ground'], house: ['buildings', 'ground', 'roads'], text: ['base'] };
+const ORDER = ['ground', 'base', 'buildings', 'roads', 'water', 'trees', 'rail', 'house', 'text'];
+const hex2rgb = h => { const n = parseInt(String(h).slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+function lab(h) {
+  const f = v => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }, [r, g, b] = hex2rgb(h).map(f);
+  const X = (0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047, Y = 0.2126 * r + 0.7152 * g + 0.0722 * b, Z = (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883;
+  const k = t => t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116, fx = k(X), fy = k(Y), fz = k(Z);
+  return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
+}
+const dLab = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+function assignFour(sc) {
+  const hue = +$('tHue').value, con = +$('tCon').value, fils = [1, 2, 3, 4].map(t => ({ t, L: lab($('col' + t).value) })), out = {};
+  for (const k of ORDER) {
+    const tgt = lab(FS.tune(sc.t[k], hue, con)), forb = new Set(((sc.diff && sc.diff[k]) || DIFF[k] || []).map(r => out[r]));
+    const pool = fils.filter(f => !forb.has(f.t)), use = pool.length ? pool : fils;
+    out[k] = use.reduce((b, f) => dLab(f.L, tgt) < dLab(b.L, tgt) ? f : b).t;
+  }
+  return out;
+}
+// the color every part gets with a look
+function schemeColors(sc) {
+  const out = {};
+  if ($('tMode').value === 'fs') { const ed = $('tEd').value; for (const [k] of ROLES) out[k] = FS.snap(FS.tune(sc.t[k], +$('tHue').value, +$('tCon').value), ed).hex; }
+  else { const a = assignFour(sc); for (const [k] of ROLES) out[k] = $('col' + a[k]).value; }
+  return out;
+}
+let SIMPLE = { pick: 0 }; try { SIMPLE = { ...SIMPLE, ...JSON.parse(localStorage.getItem('townMakerSimple') || '{}') }; } catch (e) {}
+function applyPick(k) {
+  const sc = SCHEMES[k] || SCHEMES[0]; SIMPLE.pick = SCHEMES.indexOf(sc);
+  try { localStorage.setItem('townMakerSimple', JSON.stringify(SIMPLE)); } catch (e) {}
+  if ($('tMode').value === 'fs') for (const [r] of ROLES) $('rc_' + r).value = sc.t[r];
+  else { const a = assignFour(sc); for (const [r] of ROLES) $('tool_' + r).value = a[r]; }
+  save(); updateColors(); drawThumbs();
+  for (const [i, b] of [...$('sOpts').children].entries()) b.classList.toggle('on', i === SIMPLE.pick);
+}
+function applyExpert() {
+  $('expert').checked = EXPERT; $('simple').classList.toggle('hide', EXPERT);
+  const mv = (el, slot, home) => (EXPERT ? $(home) : $(slot)).after($(el));
+  mv('pal', 'sFilSlot', 'palHome'); mv('tEdRow', 'sEdSlot', 'tEdHome'); mv('tTune', 'sTuneSlot', 'tTuneHome');
+  for (const d of document.querySelectorAll('aside details')) d.classList.toggle('hide', !EXPERT && !['dHouse', 'dLabel'].includes(d.id));
+  $('sFS').checked = $('tMode').value === 'fs';
+  if (!EXPERT) { renderSuggestions(); applyPick(SIMPLE.pick); } else updateColors();
+}
+$('expert').addEventListener('change', () => { EXPERT = $('expert').checked; try { localStorage.setItem('townMakerExpert', EXPERT ? '1' : '0'); } catch (e) {} applyExpert(); });
+$('sFS').addEventListener('change', () => { $('tMode').value = $('sFS').checked ? 'fs' : 'four'; save(); applyPick(SIMPLE.pick); });
+// small top-down previews: part per pixel + shading, recolored per look
+let thumbBase = null;
+function makeThumbBase() {
+  const m = state.model; if (!m || !state.osm) return null;
+  const p = params(), { nx, ny, S, RT, RTh, bid, cls, hiSet } = m, keys = ROLES.map(r => r[0]);
+  const W = 150, H = Math.max(40, Math.round(W * p.printD / p.printW)), Hs = p.strip > 0 ? Math.round(W * p.strip / p.printW) : 0;
+  const role = new Uint8Array(W * (H + Hs)), shade = new Float32Array(W * (H + Hs)).fill(1), top = new Float32Array(W * H);
+  const cell = (x, y) => Math.round((1 - y / (H - 1)) * (ny - 1)) * nx + Math.round(x / (W - 1) * (nx - 1));
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = cell(x, y), o = y * W + x, b = bid[i];
+    top[o] = Math.max(S[4][i], RT[i], RTh[i]);
+    let k = 'ground';
+    if (b >= 0) k = hiSet.has(b) ? 'house' : 'buildings';
+    else if (RTh[i] > 0) k = 'house'; else if (RT[i] > 0) k = 'buildings';
+    else if (cls[i] === 1) k = 'water'; else if (cls[i] === 2) k = 'roads'; else if (cls[i] === 4) k = 'rail';
+    else if (S[4][i] - S[3][i] > 0.05) k = 'trees';
+    role[o] = keys.indexOf(k);
+  }
+  const px = p.printW / W;     // mm per thumb pixel; light from the upper left
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const o = y * W + x, t = top[o], g = (xx, yy) => top[Math.min(H - 1, Math.max(0, yy)) * W + Math.min(W - 1, Math.max(0, xx))];
+    const zx = (g(x + 1, y) - g(x - 1, y)) / (2 * px), zy = (g(x, y - 1) - g(x, y + 1)) / (2 * px), nl = Math.hypot(zx, zy, 1);
+    let sh = 0.62 + 0.5 * Math.max(0, (zx * 0.55 - zy * 0.55 + 0.63) / nl);
+    for (let j = 1; j <= 10; j++) { if (x - j < 0 || y - j < 0) break; if (g(x - j, y - j) > t + j * px * 1.1) { sh *= 0.72; break; } }
+    shade[o] = sh;
+  }
+  for (let y = H; y < H + Hs; y++) for (let x = 0; x < W; x++) role[y * W + x] = keys.indexOf('base');
+  return { W, H, Hs, role, shade, keys, label: $('line1').value };
+}
+function renderSuggestions() {
+  const box = $('sOpts');
+  if (box.children.length !== SCHEMES.length) {
+    box.innerHTML = '';
+    SCHEMES.forEach((sc, k) => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'opt';
+      b.innerHTML = `<canvas></canvas><b></b><small></small>`; b.querySelector('b').textContent = sc.title; b.querySelector('small').textContent = sc.desc;
+      b.addEventListener('click', () => applyPick(k)); box.appendChild(b);
+    });
+  }
+  for (const [i, b] of [...box.children].entries()) b.classList.toggle('on', i === SIMPLE.pick);
+  thumbBase = makeThumbBase(); drawThumbs();
+}
+function drawThumbs() {
+  if (EXPERT) return;
+  const T = thumbBase; $('sHint').classList.toggle('hide', !!T); $('sOpts').classList.toggle('hide', !T); if (!T) return;
+  [...$('sOpts').children].forEach((b, k) => {
+    const cols = schemeColors(SCHEMES[k]), rgb = T.keys.map(r => hex2rgb(cols[r])), cv = b.querySelector('canvas');
+    cv.width = T.W; cv.height = T.H + T.Hs; const ctx = cv.getContext('2d'), img = ctx.createImageData(T.W, T.H + T.Hs);
+    for (let o = 0; o < T.role.length; o++) { const c = rgb[T.role[o]], s = T.shade[o]; img.data[o * 4] = Math.min(255, c[0] * s); img.data[o * 4 + 1] = Math.min(255, c[1] * s); img.data[o * 4 + 2] = Math.min(255, c[2] * s); img.data[o * 4 + 3] = 255; }
+    ctx.putImageData(img, 0, 0);
+    if (T.Hs > 4 && T.label) { ctx.fillStyle = cols.text; ctx.font = `700 ${Math.round(T.Hs * 0.42)}px Poppins, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(T.label, T.W / 2, T.H + T.Hs / 2, T.W - 8); }
+  });
+}
 
 // ---------- export ----------
 function slug() { return ($('line1').value || 'town').normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^\w]+/g, '_').replace(/^_|_$/g, '').toLowerCase() || 'town'; }
@@ -2618,6 +2783,7 @@ $('dlStl').addEventListener('click', async () => {
   finally { busy(false); }
 });
 
+applyExpert();
 loadArea();
 </script>
 </body>
