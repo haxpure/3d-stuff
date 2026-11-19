@@ -110,7 +110,7 @@
     <div class="opts" id="sOpts"></div>
   </div>
 
-  <details open><summary>Print size</summary>
+  <details open id="dPrint"><summary>Print size</summary>
     <div class="row"><label>Map width (mm)</label><input type="number" id="printW" value="160" min="40" max="260"></div>
     <div class="row"><label>Map depth (mm)</label><input type="number" id="printD" value="180" min="40" max="260"></div>
     <div class="row"><label>Bed size (mm)<small>used to center the model</small></label><input type="number" id="bed" value="270" min="100" max="600"></div>
@@ -2702,7 +2702,7 @@ function applyExpert() {
   $('expert').checked = EXPERT; $('simple').classList.toggle('hide', EXPERT);
   const mv = (el, slot, home) => (EXPERT ? $(home) : $(slot)).after($(el));
   mv('pal', 'sFilSlot', 'palHome'); mv('tEdRow', 'sEdSlot', 'tEdHome'); mv('tTune', 'sTuneSlot', 'tTuneHome');
-  for (const d of document.querySelectorAll('aside details')) d.classList.toggle('hide', !EXPERT && !['dHouse', 'dLabel'].includes(d.id));
+  for (const d of document.querySelectorAll('aside details')) d.classList.toggle('hide', !EXPERT && !['dPrint', 'dHouse', 'dLabel'].includes(d.id));
   $('sFS').checked = $('tMode').value === 'fs';
   if (!EXPERT) { renderSuggestions(); applyPick(SIMPLE.pick); } else updateColors();
 }
