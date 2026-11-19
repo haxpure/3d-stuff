@@ -84,25 +84,33 @@ function clipRingToTile(ring, E) {
 }
 // tiles: [{z,x,y,layers}] -> same structure as parseOSM()
 function omtToFeatures(tiles) {
-  const out = emptyFeatures(), byId = new Map();
+  const out = emptyFeatures(), cutPieces = [];
   for (const t of tiles) {
     const n = 2 ** t.z;
     const ll = (px, py, ext) => ({ lon: (t.x + px / ext) / n * 360 - 180, lat: Math.atan(Math.sinh(Math.PI * (1 - 2 * (t.y + py / ext) / n))) * 180 / Math.PI });
     const conv = (L, ext) => L.map(([px, py]) => ll(px, py, ext));
     const lay = name => t.layers[name] || { features: [], extent: 4096 };
+    const tk = t.z + '/' + t.x + '/' + t.y;
     { const L = lay('building');
       for (const f of L.features) { if (f.type !== 3 || f.props.hide_3d) continue;
-        const rings = f.parts.map(r => clipRingToTile(r, L.extent)).filter(Boolean).map(r => r.map(({ q, cut }) => { const o = ll(q[0], q[1], L.extent); o.cut = cut; return o; }));
-        if (!rings.length) continue;
         const h = +f.props.render_height, mh = +f.props.render_min_height || 0;
         if (mh > 0 && h - mh < 3) continue;
-        const tags = { building: 'yes', height: h > 0 ? String(h) : undefined };
-        // re-join a building cut at a tile edge: same id, different tile, both pieces touch the cut
-        const tk = t.z + '/' + t.x + '/' + t.y, cutHere = rings.some(r => r.some(q => q.cut));
-        const prev = f.id && cutHere ? byId.get(f.id) : null;
-        if (prev && prev.tk !== tk && prev.cut) { const b = out.buildings[prev.idx]; b.parts.push(rings); b.rings = b.rings.concat(rings); if (h > +b.tags.height || !b.tags.height) b.tags.height = tags.height; continue; }
-        if (f.id && cutHere) byId.set(f.id, { idx: out.buildings.length, tk, cut: true });
-        out.buildings.push({ id: f.id, rings, parts: [rings], tags });
+        // one tile feature can hold many houses (multipolygon): every outer ring becomes its own building
+        const clipped = f.parts.map(r => clipRingToTile(r, L.extent)).filter(Boolean).map(r => r.map(({ q, cut }) => { const o = [q[0], q[1]]; o.cut = cut; return o; }));
+        for (const pg of groupRings(clipped)) {
+          const rings = pg.map(r => r.map(o => { const q = ll(o[0], o[1], L.extent); q.cut = o.cut; return q; }));
+          const tags = { building: 'yes', height: h > 0 ? String(h) : undefined };
+          const bb = [Infinity, Infinity, -Infinity, -Infinity]; for (const q of rings[0]) { bb[0] = Math.min(bb[0], q.lat); bb[1] = Math.min(bb[1], q.lon); bb[2] = Math.max(bb[2], q.lat); bb[3] = Math.max(bb[3], q.lon); }
+          // re-join a house cut at a tile edge: piece from another tile that also touches the cut and meets this one there
+          const cutHere = rings[0].some(q => q.cut), E = 2e-7;
+          const prev = cutHere ? cutPieces.find(c => !c.tks.has(tk) && c.bb[0] <= bb[2] + E && bb[0] <= c.bb[2] + E && c.bb[1] <= bb[3] + E && bb[1] <= c.bb[3] + E) : null;
+          if (prev) {
+            const bl = out.buildings[prev.idx]; bl.parts.push(rings); bl.rings = bl.rings.concat(rings); if (h > +bl.tags.height || !bl.tags.height) bl.tags.height = tags.height;
+            prev.tks.add(tk); prev.bb = [Math.min(prev.bb[0], bb[0]), Math.min(prev.bb[1], bb[1]), Math.max(prev.bb[2], bb[2]), Math.max(prev.bb[3], bb[3])]; continue;
+          }
+          if (cutHere) cutPieces.push({ idx: out.buildings.length, tks: new Set([tk]), bb });
+          out.buildings.push({ id: f.id, rings, parts: [rings], tags });
+        }
       } }
     { const L = lay('transportation');
       for (const f of L.features) { if (f.type !== 2) continue; const p = f.props;

@@ -426,14 +426,15 @@ updateColors();
 const ray = new THREE.Raycaster(); let downAt = null;
 renderer.domElement.addEventListener('pointerdown', e => { downAt = [e.clientX, e.clientY]; });
 renderer.domElement.addEventListener('pointerup', e => {
-  if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 5 || !pickMeshes.length || !state.model) return;
+  if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 10 || !pickMeshes.length || !state.model) return;
   const r = renderer.domElement.getBoundingClientRect();
   ray.setFromCamera(new THREE.Vector2((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1), camera);
   const hit = ray.intersectObjects(pickMeshes)[0]; if (!hit) return;
+  // the house under the finger: nearest building cell to the hit point
   const m = state.model, c0 = Math.round(hit.point.x / m.dx), r0 = Math.round(hit.point.y / m.dy);
-  let id = -1;
-  for (let rad = 0; rad <= 2 && id < 0; rad++) for (let j = -rad; j <= rad && id < 0; j++) for (let i = -rad; i <= rad && id < 0; i++) {
-    const c = c0 + i, rr = r0 + j; if (c >= 0 && c < m.nx && rr >= 0 && rr < m.ny && m.bid[rr * m.nx + c] >= 0) id = m.bid[rr * m.nx + c];
+  let id = -1, bd = Infinity;
+  for (let j = -3; j <= 3; j++) for (let i = -3; i <= 3; i++) {
+    const c = c0 + i, rr = r0 + j, d = i * i + j * j; if (d < bd && c >= 0 && c < m.nx && rr >= 0 && rr < m.ny && m.bid[rr * m.nx + c] >= 0) { bd = d; id = m.bid[rr * m.nx + c]; }
   }
   if (id < 0) return;
   if (state.highlight.has(id)) state.highlight.delete(id); else state.highlight.add(id);
