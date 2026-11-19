@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maker Tools</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#111317; --card:#181b21; --line:#262a33; --text:#e8eaee; --mute:#8b919c; --acc:#f6c21c; }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; background:var(--bg); color:var(--text); font:15px/1.5 Inter, system-ui, sans-serif; display:flex; justify-content:center; padding:48px 20px; }
+  main { width:100%; max-width:760px; }
+  h1 { font:700 30px Poppins, sans-serif; margin:0 0 4px; } h1 span { color:var(--acc); }
+  .sub { color:var(--mute); margin-bottom:32px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:16px; }
+  a.card { display:block; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px; color:inherit; text-decoration:none; transition:border-color .15s, transform .15s; }
+  a.card:hover { border-color:var(--acc); transform:translateY(-2px); }
+  .card h2 { font:700 19px Poppins, sans-serif; margin:10px 0 6px; }
+  .card p { margin:0; color:#c7cbd3; font-size:14px; }
+  .hide { display:none !important; }
+  .dots { display:flex; gap:6px; } .dots i { width:14px; height:14px; border-radius:4px; display:block; }
+  footer { color:var(--mute); font-size:12px; margin-top:36px; }
+  footer a { color:var(--mute); }
+  .top { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:0 0 20px; padding-right:96px; }
+  .acct { display:flex; align-items:center; gap:10px; color:var(--mute); font-size:13px; }
+  .acct button { background:#0f1115; color:#c7cbd3; border:1px solid var(--line); border-radius:8px; padding:6px 12px; font:600 13px Inter, sans-serif; cursor:pointer; }
+  .acct button:hover { border-color:var(--acc); color:var(--acc); }
+  h3 { font:600 12px Inter, sans-serif; color:var(--mute); text-transform:uppercase; letter-spacing:.7px; margin:0 0 10px; }
+</style>
+<script src="auth-config.js"></script>
+<script src="auth-guard.js"></script>
+</head>
+<body>
+<main>
+  <div class="top"><h1>Maker <span>Tools</span></h1>
+    <div class="acct hide" id="acct"><span id="who"></span><button type="button" id="logout">Log out</button></div></div>
+  <div class="sub">Browser tools for multi-color 3D printing. Everything runs in your browser; the 3MF files load as one object with filaments already assigned in Orca / Snapmaker Orca.</div>
+  <h3>Choose a tool</h3>
+  <div class="grid">
+    <a class="card" href="relief-maker.html">
+      <div class="dots"><i style="background:#f6c21c"></i><i style="background:#a3a6aa"></i><i style="background:#5fc3d6"></i><i style="background:#17181b"></i></div>
+      <h2>Relief Maker</h2>
+      <p>Address → terrain relief with contour lines or elevation-band / satellite colors, trails, POI markers, detailed water and a name plate.</p>
+    </a>
+    <a class="card" href="town-maker.html">
+      <div class="dots"><i style="background:#f6c21c"></i><i style="background:#a3a6aa"></i><i style="background:#5fc3d6"></i><i style="background:#17181b"></i></div>
+      <h2>Town Maker</h2>
+      <p>Your street in 3D: buildings with roofs, roads, trees, fields and water. Your own house highlighted.</p>
+    </a>
+    <a class="card" href="fin-studio.html">
+      <div class="dots"><i style="background:#8fa3b8"></i><i style="background:#e5484d"></i><i style="background:#f08c00"></i><i style="background:#12b886"></i></div>
+      <h2>Fin Studio</h2>
+      <p>Open an STL, OBJ, 3MF or PLY, find the best orientation and add clean breakaway support fins. Export as 3MF for OrcaSlicer or STL.</p>
+    </a>
+  </div>
+  <footer>Data: © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, OpenFreeMap, AWS Terrain Tiles, Photon/Nominatim. Map tiles: Esri.</footer>
+</main>
+<!--I18N-->
+<script>
+document.addEventListener('auth-ready', e => {
+  document.getElementById('who').textContent = e.detail.email || '';
+  document.getElementById('acct').classList.remove('hide');
+});
+document.getElementById('logout').addEventListener('click', () => window.authLogout());
+</script>
+</body>
+</html>

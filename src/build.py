@@ -17,4 +17,14 @@ for k, v in [('/*CORE*/', core), ('/*EARCUT*/', rd('earcut_inline.js')), ('/*TOW
 open(os.path.join(R, 'town-maker.html'), 'w', encoding='utf-8').write(t.replace('<!--I18N-->', I18N))
 # Fin Studio is maintained as one self-contained file
 open(os.path.join(R, 'fin-studio.html'), 'w', encoding='utf-8').write(rd('fin_studio.html'))
-print('built relief-maker.html, town-maker.html, fin-studio.html')
+# start page (tool picker) and login page
+for src, out in [('index.html', 'index.html'), ('login.html', 'login.html')]:
+    open(os.path.join(R, out), 'w', encoding='utf-8').write(rd(src).replace('<!--I18N-->', I18N))
+# login check (auth-config.js + auth-guard.js) in every tool, first thing in <head>
+AUTH = '<script src="auth-config.js"></script>\n<script src="auth-guard.js"></script>\n'
+for out in ['relief-maker.html', 'town-maker.html', 'fin-studio.html']:
+    f = os.path.join(R, out); h = open(f, encoding='utf-8').read()
+    if 'auth-guard.js' not in h:
+        i = h.index('<head>') + len('<head>'); h = h[:i] + '\n' + AUTH + h[i:]
+    open(f, 'w', encoding='utf-8').write(h)
+print('built index.html, login.html, relief-maker.html, town-maker.html, fin-studio.html')

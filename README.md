@@ -35,3 +35,16 @@ python3 src/build.py
 ## Printing notes
 - Relief Maker: slice with the layer height set in the tool (default 0.2 mm) so contour lines land on whole layers.
 - Overlapping parts are resolved by part order in the slicer; buildings come first in the file on purpose.
+
+## Login (Supabase)
+
+`login.html` (log in / register / forgot password) and the start page `index.html` (tool picker) use Supabase Auth.
+Every tool page loads `auth-config.js` + `auth-guard.js` and sends visitors without a session to the login page.
+
+Setup: put the Supabase **Project URL** and the **anon / publishable key** into `auth-config.js`.
+While both are empty the login is off and all tools open without an account.
+In Supabase → Authentication → URL Configuration set the Site URL to `https://haxpure.github.io/3d-stuff/login.html`
+and add `https://haxpure.github.io/3d-stuff/*` to the Redirect URLs.
+
+Note: the repo and GitHub Pages are public, so the login keeps people out of the normal way in, but the tool files
+themselves are still downloadable. Real protection needs the tools served from a private place (e.g. Supabase Storage with a policy).
