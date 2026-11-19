@@ -104,10 +104,14 @@
     <div id="sFilSlot"></div>
     <label class="check"><input type="checkbox" id="sFS"> I have the Full Spectrum pack (CMY + White/Gray)</label>
     <div id="sEdSlot"></div>
-    <h3>Suggestions</h3>
-    <div id="sTuneSlot"></div>
-    <div class="hint" id="sHint">Load an area to see the suggestions.</div>
-    <div class="opts" id="sOpts"></div>
+    <div id="sSugSlot"></div>
+    <div id="sSug">
+      <h3>Suggestions</h3>
+      <div id="sTuneSlot"></div>
+      <div class="hint" id="sHint">Load an area to see the suggestions.</div>
+      <div class="opts" id="sOpts"></div>
+      <div class="hint hide" id="sExpHint">Tap a look to set all parts below at once; you can change single parts afterwards.</div>
+    </div>
   </div>
 
   <details open id="dPrint"><summary>Print size</summary>
@@ -168,6 +172,7 @@
   </details>
 
   <details open id="dFil"><summary>Filaments &amp; tools</summary>
+    <div id="sSugHome"></div>
     <div class="row"><label>Mode</label><select id="tMode"><option value="four">4 colors (fixed)</option><option value="fs">Full Spectrum pack (CMY + W/G)</option></select></div>
     <div id="tEdHome"></div><div class="row hide" id="tEdRow"><label>Filament pack<small>T1 Cyan · T2 Magenta · T3 Yellow · T4 White / Gray</small></label><select id="tEd"><option value="white">Full Spectrum White Edition</option><option value="gray">Full Spectrum Gray Edition</option></select></div>
     <div id="tTuneHome"></div><div id="tTune">
@@ -405,7 +410,7 @@ async function rebuildPreview() {
     const lm = new THREE.Mesh(new THREE.PlaneGeometry(p.printW, p.strip), labelMat); lm.position.set(p.printW / 2, -p.strip / 2, p.base + p.textH); group.add(lm);
   }
   updateColors();
-  if (!EXPERT) renderSuggestions();
+  renderSuggestions();
   const bh = p.bed / 2, cx = p.printW / 2, cy = (p.printD - p.strip) / 2;
   bedLine.geometry.setFromPoints([new THREE.Vector3(cx - bh, cy - bh, 0), new THREE.Vector3(cx + bh, cy - bh, 0), new THREE.Vector3(cx + bh, cy + bh, 0), new THREE.Vector3(cx - bh, cy + bh, 0)]);
   if (!state.fitted) { controls.target.set(cx, cy, m.zmax / 4); camera.position.set(cx - p.printW * 0.3, cy - p.printD * 1.4, Math.max(p.printW, p.printD) * 1.05); state.fitted = true; }
@@ -545,10 +550,11 @@ function applyPick(k) {
 function applyExpert() {
   $('expert').checked = EXPERT; $('simple').classList.toggle('hide', EXPERT);
   const mv = (el, slot, home) => (EXPERT ? $(home) : $(slot)).after($(el));
+  mv('sSug', 'sSugSlot', 'sSugHome'); $('sExpHint').classList.toggle('hide', !EXPERT);
   mv('pal', 'sFilSlot', 'palHome'); mv('tEdRow', 'sEdSlot', 'tEdHome'); mv('tTune', 'sTuneSlot', 'tTuneHome');
   for (const d of document.querySelectorAll('aside details')) d.classList.toggle('hide', !EXPERT && !['dPrint', 'dHouse', 'dLabel'].includes(d.id));
   $('sFS').checked = $('tMode').value === 'fs';
-  if (!EXPERT) { renderSuggestions(); applyPick(SIMPLE.pick); } else updateColors();
+  renderSuggestions(); if (!EXPERT) applyPick(SIMPLE.pick); else updateColors();
 }
 $('expert').addEventListener('change', () => { EXPERT = $('expert').checked; try { localStorage.setItem('townMakerExpert', EXPERT ? '1' : '0'); } catch (e) {} applyExpert(); });
 $('sFS').addEventListener('change', () => { $('tMode').value = $('sFS').checked ? 'fs' : 'four'; save(); applyPick(SIMPLE.pick); });
@@ -595,7 +601,6 @@ function renderSuggestions() {
   thumbBase = makeThumbBase(); drawThumbs();
 }
 function drawThumbs() {
-  if (EXPERT) return;
   const T = thumbBase; $('sHint').classList.toggle('hide', !!T); $('sOpts').classList.toggle('hide', !T); if (!T) return;
   [...$('sOpts').children].forEach((b, k) => {
     const cols = schemeColors(SCHEMES[k]), rgb = T.keys.map(r => hex2rgb(cols[r])), cv = b.querySelector('canvas');
