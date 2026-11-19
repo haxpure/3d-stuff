@@ -17,4 +17,9 @@ for k, v in [('/*CORE*/', core), ('/*EARCUT*/', rd('earcut_inline.js')), ('/*TOW
 open(os.path.join(R, 'town-maker.html'), 'w', encoding='utf-8').write(t.replace('<!--I18N-->', I18N))
 # Fin Studio is maintained as one self-contained file
 open(os.path.join(R, 'fin-studio.html'), 'w', encoding='utf-8').write(rd('fin_studio.html'))
+# "Report a problem" button in every tool (first in <head> so it also sees early script errors)
+REP = '<script>\n' + rd('report.js') + '</script>\n'
+for out in ['relief-maker.html', 'town-maker.html', 'fin-studio.html']:
+    f = os.path.join(R, out); h = open(f, encoding='utf-8').read(); i = h.index('<head>') + len('<head>')
+    open(f, 'w', encoding='utf-8').write(h[:i] + '\n' + REP + h[i:])
 print('built relief-maker.html, town-maker.html, fin-studio.html')

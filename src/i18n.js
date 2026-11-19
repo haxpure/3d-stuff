@@ -92,6 +92,14 @@
     'POI in the middle of the map (your address)': 'POI in der Kartenmitte (deine Adresse)', 'Middle POI shape': 'Form des Mitte-POI', 'Center': 'Mitte',
     'Enlarge the map until this trail fits (center stays)': 'Karte vergrößern, bis dieser Weg ganz draufpasst (Mitte bleibt)', 'This trail already fits.': 'Dieser Weg passt schon ganz drauf.',
     'Max. colors': 'Max. Farben', 'the most used colors / mixes are kept': 'die am meisten genutzten Farben / Mischungen bleiben',
+    // --- report a problem ---
+    '⚑ Report a problem': '⚑ Problem melden', 'Report a problem with this tool': 'Ein Problem mit diesem Tool melden', 'Report a problem': 'Problem melden', 'Close': 'Schließen',
+    'What happened, and what did you expect? Steps to repeat it help a lot.': 'Was ist passiert und was hast du erwartet? Schritte zum Nachstellen helfen sehr.',
+    'e.g. After changing the filament color the preview stays yellow.': 'z. B. Nach dem Ändern der Filamentfarbe bleibt die Vorschau gelb.',
+    'Attach current settings (contains the address / coordinates)': 'Aktuelle Einstellungen anhängen (enthält Adresse / Koordinaten)',
+    'Copy text': 'Text kopieren', 'Send via GitHub': 'Über GitHub senden',
+    'GitHub opens with the report filled in; you only need to press "Create" (GitHub account needed). Without an account: copy the text and send it to the owner.': 'GitHub öffnet sich mit der fertig ausgefüllten Meldung, du musst nur noch auf „Create" drücken (GitHub-Konto nötig). Ohne Konto: Text kopieren und dem Betreiber schicken.',
+    'Please describe the problem first.': 'Bitte beschreibe zuerst das Problem.', 'Copied. Paste it into a message to the owner.': 'Kopiert. Füge es in eine Nachricht an den Betreiber ein.',
     // --- Relief: bed fill + middle POI ---
     "Trails fill the bed: print size grows to the bed and follows the trail's shape": 'Wege füllen das Druckbett: Druckgröße wächst bis zum Bett und folgt der Form des Wegs',
     'Use the whole bed now': 'Jetzt ganzes Druckbett nutzen', 'Fit the map to this trail (center stays)': 'Karte an diesen Weg anpassen (Mitte bleibt)',
