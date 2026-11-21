@@ -132,8 +132,8 @@
     <h3>Your filaments</h3>
     <div class="hint">The colors loaded in your printer. The suggestions below are made from them.</div>
     <div id="sFils"></div>
-    <label class="check"><input type="checkbox" id="sFS"> I have the Full Spectrum pack (CMY + White/Gray)</label>
-    <div class="row hide" id="sEdRow"><label>Pack</label><select id="sEd"><option value="white">White Edition</option><option value="gray">Gray Edition</option></select></div>
+    <label class="check"><input type="checkbox" id="sFS"> I have the Full Spectrum pack (CMY + White/Gray/Black)</label>
+    <div class="row hide" id="sEdRow"><label>Pack</label><select id="sEd"><option value="white">White Edition</option><option value="gray">Gray Edition</option><option value="black">CMY + Black</option></select></div>
     <h3>Suggestions</h3>
     <div id="sTune">
       <div class="row"><label>Hue</label><div class="rng"><input type="range" id="sHue" min="-180" max="180" step="5" value="0"><output></output></div></div>
@@ -184,7 +184,7 @@
       <option value="multi">More colors (slicer mixes)</option>
       <option value="fs">Full Spectrum pack (CMY + W/G)</option>
     </select></div>
-    <div class="row" id="rowEd"><label>Filament pack<small>T1 Cyan · T2 Magenta · T3 Yellow · T4 White / Gray</small></label><select id="fsEd"><option value="white">Full Spectrum White Edition</option><option value="gray">Full Spectrum Gray Edition</option></select></div>
+    <div class="row" id="rowEd"><label>Filament pack<small>T1 Cyan · T2 Magenta · T3 Yellow · T4 White / Gray / Black</small></label><select id="fsEd"><option value="white">Full Spectrum White Edition</option><option value="gray">Full Spectrum Gray Edition</option><option value="black">CMY + Black</option></select></div>
     <div class="row"><label>Coloring</label><select id="colStyle"></select></div>
     <label class="check" id="rowRealContours"><input type="checkbox" id="realContours"> Draw contour lines on top</label>
     <h3 id="filTitle">Your 4 filaments</h3>
@@ -210,7 +210,9 @@
       </select></div>
       <label class="check"><input type="checkbox" id="autoLevels" checked> Auto-levels (stretch dark imagery)</label>
       <div class="row"><label>Saturation</label><div class="rng"><input type="range" id="sat" min="0.5" max="2.5" step="0.05" value="1.3"><output></output></div></div>
-      <div class="row"><label>Cleanup<small>removes single-pixel speckles</small></label><div class="rng"><input type="range" id="cleanup" min="0" max="5" step="1" value="2"><output></output></div></div>
+      <div class="row"><label>Remove shadows<small>takes the sun's shading out of the photo</small></label><div class="rng"><input type="range" id="shade" min="0" max="100" step="5" value="100"><output></output></div></div>
+      <div class="row"><label>Smoothing<small>blurs fields, roofs and roads before matching</small></label><div class="rng"><input type="range" id="blur" min="0" max="5" step="1" value="2"><output></output></div></div>
+      <div class="row"><label>Cleanup<small>merges small patches (0.35 mm per step)</small></label><div class="rng"><input type="range" id="cleanup" min="0" max="5" step="1" value="2"><output></output></div></div>
       <div class="row" id="rowMaxCols"><label>Max. colors<small>the most used colors / mixes are kept</small></label><input type="number" id="maxCols" value="12" min="2" max="40" step="1"></div>
       <div class="row"><label>Filaments from imagery<small>replaces the "R" filaments</small></label><div style="display:grid;grid-template-columns:52px 1fr;gap:6px"><input type="number" id="kN" value="6" min="2" max="12"><button type="button" id="kBtn" class="sec" style="padding:6px">Create</button></div></div>
     </div>
@@ -764,11 +766,11 @@ function imageryCells(p, m, sample) {
 function adjustColors(px, autoLevels, sat, hue = 0, con = 100) {
   const out = new Uint8Array(px.length), n = px.length / 3;
   const lo = [0, 0, 0], hi = [255, 255, 255];
-  if (autoLevels) for (let ch = 0; ch < 3; ch++) {
-    const h = new Uint32Array(256); for (let i = 0; i < n; i++) h[px[i * 3 + ch]]++;
-    let s = 0, a = 0; while (a < 255 && (s += h[a]) < n * 0.01) a++;
-    s = 0; let b = 255; while (b > 0 && (s += h[b]) < n * 0.01) b--;
-    if (b - a > 10) { lo[ch] = a; hi[ch] = b; }
+  if (autoLevels) {   // one stretch for all channels (on brightness): per-channel stretching shifted dark forest to gray/black
+    const h = new Uint32Array(256); for (let i = 0; i < n; i++) h[Math.round(0.299 * px[i * 3] + 0.587 * px[i * 3 + 1] + 0.114 * px[i * 3 + 2])]++;
+    let s = 0, a = 0; while (a < 255 && (s += h[a]) < n * 0.005) a++;
+    s = 0; let b = 255; while (b > 0 && (s += h[b]) < n * 0.005) b--;
+    if (b - a > 10) { lo.fill(a); hi.fill(b); }
   }
   for (let i = 0; i < n; i++) {
     const v = [0, 1, 2].map(ch => (px[i * 3 + ch] - lo[ch]) * 255 / (hi[ch] - lo[ch]));
@@ -793,6 +795,117 @@ function quantizeCells(px, palette, cw, ch, cleanup) {
   }
   if (cleanup > 0) majority(C, cw, ch, cleanup);
   return C;
+}
+function lab2rgb(L, a, b) {
+  const fy = (L + 16) / 116, fx = fy + a / 500, fz = fy - b / 200;
+  const fi = t => t > 0.206893 ? t * t * t : (t - 16 / 116) / 7.787;
+  const X = fi(fx) * 0.95047, Y = fi(fy), Z = fi(fz) * 1.08883;
+  const g = v => 255 * (v <= 0.0031308 ? 12.92 * v : 1.055 * Math.max(v, 0) ** (1 / 2.4) - 0.055);
+  return [g(3.2406 * X - 1.5372 * Y - 0.4986 * Z), g(-0.9689 * X + 1.8758 * Y + 0.0415 * Z), g(0.0557 * X - 0.2040 * Y + 1.0570 * Z)];
+}
+// box blur in place (edges clamped), radius in cells
+function boxBlur(A, w, h, r) {
+  const tmp = new Float32Array(Math.max(w, h)), n = 2 * r + 1;
+  for (let y = 0; y < h; y++) {
+    const o = y * w; let s = 0;
+    for (let k = -r; k <= r; k++) s += A[o + Math.min(w - 1, Math.max(0, k))];
+    for (let x = 0; x < w; x++) { tmp[x] = s / n; s += A[o + Math.min(w - 1, x + r + 1)] - A[o + Math.max(0, x - r)]; }
+    for (let x = 0; x < w; x++) A[o + x] = tmp[x];
+  }
+  for (let x = 0; x < w; x++) {
+    let s = 0;
+    for (let k = -r; k <= r; k++) s += A[Math.min(h - 1, Math.max(0, k)) * w + x];
+    for (let y = 0; y < h; y++) { tmp[y] = s / n; s += A[Math.min(h - 1, y + r + 1) * w + x] - A[Math.max(0, y - r) * w + x]; }
+    for (let y = 0; y < h; y++) A[y * w + x] = tmp[y];
+  }
+}
+// Satellite photos have the sun's shading baked in: slopes facing away from the sun look dark, the others pale,
+// whatever grows there. Fit the photo's brightness against the terrain normal (this finds the photo's sun direction),
+// remove that directional part and give shaded areas their color back. Then blur a little, so fields, roofs and
+// roads don't turn into speckles. In and out: per-cell RGB (Uint8Array cw*ch*3).
+function deshadeCells(px, m, cw, ch, strength, blur) {
+  const n = cw * ch, Lc = new Float32Array(n), A = new Float32Array(n), B = new Float32Array(n);
+  for (let i = 0; i < n; i++) { const q = rgb2lab(px[i * 3], px[i * 3 + 1], px[i * 3 + 2]); Lc[i] = q[0]; A[i] = q[1]; B[i] = q[2]; }
+  if (strength > 0 && m.Hs) {
+    const { nx, Hs } = m, gx = m.dx / m.scale * 1000, gy = m.dy / m.scale * 1000;
+    const NX = new Float32Array(n), NY = new Float32Array(n), NZ = new Float32Array(n);
+    const M = [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]], v = [1, 0, 0, 0];
+    for (let r = 0; r < ch; r++) for (let c = 0; c < cw; c++) {
+      const a = r * nx + c, b = a + 1, d = a + nx, e = d + 1, i = r * cw + c;
+      const sx = ((Hs[b] - Hs[a]) + (Hs[e] - Hs[d])) / (2 * gx), sy = ((Hs[d] - Hs[a]) + (Hs[e] - Hs[b])) / (2 * gy), l = Math.hypot(sx, sy, 1);
+      NX[i] = -sx / l; NY[i] = -sy / l; NZ[i] = 1 / l;
+      if (Lc[i] > 90 || Lc[i] < 2) continue;   // snow / glare / no data would skew the fit
+      v[1] = NX[i]; v[2] = NY[i]; v[3] = NZ[i];
+      for (let j = 0; j < 4; j++) { for (let k = 0; k < 4; k++) M[j][k] += v[j] * v[k]; M[j][4] += v[j] * Lc[i]; }
+    }
+    for (let j = 0; j < 4; j++) M[j][j] += 1e-6 * (M[0][0] + 1);   // flat terrain: no direction to find
+    for (let col = 0; col < 4; col++) {   // Gauss-Jordan, partial pivot
+      let pv = col; for (let r = col + 1; r < 4; r++) if (Math.abs(M[r][col]) > Math.abs(M[pv][col])) pv = r;
+      [M[col], M[pv]] = [M[pv], M[col]];
+      const d = M[col][col]; if (Math.abs(d) < 1e-12) { M[col][4] = 0; continue; }
+      for (let k = col; k < 5; k++) M[col][k] /= d;
+      for (let r = 0; r < 4; r++) if (r !== col) { const f = M[r][col]; for (let k = col; k < 5; k++) M[r][k] -= f * M[col][k]; }
+    }
+    const k1 = M[1][4] * strength, k2 = M[2][4] * strength;
+    for (let i = 0; i < n; i++) {
+      const L0 = Lc[i]; if (L0 > 90 || L0 < 2) continue;
+      const L1 = Math.max(0, Math.min(100, L0 - (k1 * NX[i] + k2 * NY[i])));
+      const f = Math.min(1.8, Math.max(0.85, (L1 + 8) / (L0 + 8)));   // shade also drains color
+      Lc[i] = L1; A[i] *= f; B[i] *= f;
+    }
+  }
+  if (blur > 0) for (const X of [Lc, A, B]) { boxBlur(X, cw, ch, blur); boxBlur(X, cw, ch, blur); }
+  const out = new Uint8Array(n * 3);
+  for (let i = 0; i < n; i++) { const q = lab2rgb(Lc[i], A[i], B[i]); for (let j = 0; j < 3; j++) out[i * 3 + j] = Math.max(0, Math.min(255, Math.round(q[j]))); }
+  return out;
+}
+// Satellite matching. The photo's lightness range is first squeezed into the range the candidates can reach
+// (a pack without black has no dark greens: dark forest would otherwise pick the darkest mix, whatever its hue);
+// lifted colors get their chroma scaled up with them. The distance then weighs hue most, chroma and lightness less.
+function quantizeReal(px, palette, cw, ch, wL = 0.45, wC = 0.35, wH = 1.4) {
+  const n = cw * ch, C = new Int16Array(n), cache = new Map();
+  const hist = new Uint32Array(101);
+  for (let i = 0; i < n; i += 7) hist[Math.max(0, Math.min(100, Math.round(rgb2lab(px[i * 3], px[i * 3 + 1], px[i * 3 + 2])[0])))]++;
+  const tot = hist.reduce((s, v) => s + v, 0), pct = q => { let s = 0; for (let k = 0; k <= 100; k++) if ((s += hist[k]) >= tot * q) return k; return 100; };
+  const iLo = pct(0.02), iHi = Math.max(iLo + 10, pct(0.98));
+  let pLo = 100, pHi = 0; for (const q of palette) { pLo = Math.min(pLo, q.lab[0]); pHi = Math.max(pHi, q.lab[0]); }
+  const sc = Math.min(1, (pHi - pLo) / (iHi - iLo)), mid = (pLo + pHi) / 2, imid = (iLo + iHi) / 2;
+  const mapL = L => Math.max(pLo, Math.min(pHi, mid + (L - imid) * sc));
+  const qC = palette.map(q => Math.hypot(q.lab[1], q.lab[2]));
+  for (let i = 0; i < n; i++) {
+    const r = px[i * 3], g = px[i * 3 + 1], b = px[i * 3 + 2], key = (r >> 2) << 12 | (g >> 2) << 6 | (b >> 2);
+    let id = cache.get(key);
+    if (id === undefined) {
+      const L = rgb2lab(r, g, b), Lm = mapL(L[0]), f = Math.min(2.5, Math.max(1, (Lm + 10) / (L[0] + 10)));
+      const a = L[1] * f, bb = L[2] * f, C1 = Math.hypot(a, bb); let best = Infinity;
+      for (let k = 0; k < palette.length; k++) {
+        const q = palette[k].lab, dC = C1 - qC[k], da = a - q[1], db = bb - q[2];
+        const d = wL * (Lm - q[0]) ** 2 + wC * dC * dC + wH * Math.max(0, da * da + db * db - dC * dC);
+        if (d < best) { best = d; id = palette[k].id; }
+      }
+      cache.set(key, id);
+    }
+    C[i] = id;
+  }
+  return C;
+}
+// merge patches smaller than minCells (4-connected) into the neighbor they share the longest border with
+function removeSmall(C, cw, ch, minCells) {
+  if (minCells < 2) return;
+  const n = cw * ch, lab = new Int32Array(n).fill(-1), stack = new Int32Array(n), cells = new Int32Array(n);
+  for (let s = 0; s < n; s++) {
+    if (lab[s] >= 0) continue;
+    const id = C[s]; let sp = 0, cnt = 0; stack[sp++] = s; lab[s] = s;
+    while (sp) {
+      const i = stack[--sp]; cells[cnt++] = i; const x = i % cw;
+      for (const j of [x > 0 ? i - 1 : -1, x < cw - 1 ? i + 1 : -1, i - cw, i + cw]) if (j >= 0 && j < n && lab[j] < 0 && C[j] === id) { lab[j] = s; stack[sp++] = j; }
+    }
+    if (cnt >= minCells) continue;
+    const nb = new Map();
+    for (let k = 0; k < cnt; k++) { const i = cells[k], x = i % cw; for (const j of [x > 0 ? i - 1 : -1, x < cw - 1 ? i + 1 : -1, i - cw, i + cw]) if (j >= 0 && j < n && C[j] !== id) nb.set(C[j], (nb.get(C[j]) || 0) + 1); }
+    let best = id, bn = 0; for (const [v, c] of nb) if (c > bn) { bn = c; best = v; }
+    for (let k = 0; k < cnt; k++) C[cells[k]] = best;
+  }
 }
 function kmeans(px, k, iters = 15) {
   const n = px.length / 3, step = Math.max(1, Math.floor(n / 20000)), S = [];
@@ -925,7 +1038,7 @@ if (line2Auto || !$('line2').value) { line2Auto = true; updateLine2(); }
 
 for (const el of document.querySelectorAll('.rng')) {
   const r = el.querySelector('input'), o = el.querySelector('output');
-  const f = () => o.textContent = (+r.value).toFixed(r.step < 1 ? (r.step < 0.1 ? 2 : 1) : 0) + (r.id === 'vex' || r.id === 'bex' ? '×' : r.id === 'sHue' || r.id === 'roofPitch' ? '°' : r.id === 'sCon' ? '%' : '');
+  const f = () => o.textContent = (+r.value).toFixed(r.step < 1 ? (r.step < 0.1 ? 2 : 1) : 0) + (r.id === 'vex' || r.id === 'bex' ? '×' : r.id === 'sHue' || r.id === 'roofPitch' ? '°' : r.id === 'sCon' || r.id === 'shade' ? '%' : '');
   r._fmt = f; r.addEventListener('input', f); f();
 }
 function trailRows() { const inl = $('trailMode').value === 'inlay'; $('rowTrailH').classList.toggle('hide', inl); $('rowTrailD').classList.toggle('hide', !inl); }
@@ -962,7 +1075,7 @@ let COL = null;
 try { COL = JSON.parse(localStorage.getItem('landscapeMakerColors3') || 'null'); } catch (e) {}
 if (!COL || !COL.custom || !COL.real || COL.custom.fils.length !== 4 || !['four', 'multi', 'fs'].includes(COL.mode))
   COL = { mode: 'multi', style4: 'bands', styleN: 'real', custom: presetPal('alpine4', 350, 1450), real: presetPal('satellite', 350, 1450), skin: 0.6, imgSrc: 'esri', autoLevels: true, sat: 1.3, cleanup: 2, realContours: false, kN: 6, blendM: 80, gSteps: 3 };
-COL.blendM ??= 80; COL.gSteps ??= 3; COL.maxCols ??= 12; COL.fsEd ??= 'white'; if (!COL.fs) COL.fs = presetPal('grad8', 350, 1450);
+COL.blendM ??= 80; COL.gSteps ??= 3; COL.maxCols ??= 12; COL.shade ??= 100; COL.blur ??= 2; COL.fsEd ??= 'white'; if (!COL.fs) COL.fs = presetPal('grad8', 350, 1450);
 const PAL = () => COL.mode === 'fs' ? COL.fs : COL.mode === 'multi' ? COL.real : COL.custom;
 // internal coloring mode: 'contour' | 'bands' | 'real'
 const imode = () => COL.mode === 'four' ? COL.style4 : (COL.styleN === 'real' ? 'real' : 'bands');
@@ -1061,7 +1174,7 @@ function renderColors() {
   });
   $('colMode').value = COL.mode; $('slopeDeg').value = C.slopeDeg;
   const cs = $('colStyle'); cs.innerHTML = ''; for (const [v, l] of STYLES[COL.mode]) cs.add(new Option(l, v)); cs.value = COL.mode === 'four' ? COL.style4 : COL.styleN;
-  for (const id of ['skin', 'imgSrc', 'sat', 'cleanup', 'kN', 'blendM', 'gSteps', 'maxCols']) $(id).value = COL[id];
+  for (const id of ['skin', 'imgSrc', 'sat', 'shade', 'blur', 'cleanup', 'kN', 'blendM', 'gSteps', 'maxCols']) $(id).value = COL[id];
   $('rowSteps').classList.toggle('hide', !real || fsm); $('rowBlend').classList.toggle('hide', !real || sat);
   if (sat && real && !fsm && !$('pReal').contains($('rowSteps'))) $('pReal').append($('rowSteps')); if (!sat && !$('pBands').contains($('rowSteps'))) $('rowBlend').after($('rowSteps'));
   $('rowEd').classList.toggle('hide', !fsm); $('fsEd').value = COL.fsEd;
@@ -1080,7 +1193,7 @@ $('colMode').addEventListener('change', () => { COL.mode = $('colMode').value; c
 $('fsEd').addEventListener('change', () => { COL.fsEd = $('fsEd').value; colorsChanged(true); });
 $('colStyle').addEventListener('change', () => { if (COL.mode === 'four') COL.style4 = $('colStyle').value; else COL.styleN = $('colStyle').value; colorsChanged(true); if (imode() === 'real') ensureImagery().catch(() => {}); });
 $('slopeDeg').addEventListener('input', () => { PAL().slopeDeg = +$('slopeDeg').value; colorsChanged(false); });
-for (const id of ['skin', 'sat', 'cleanup', 'kN', 'blendM', 'gSteps', 'maxCols']) $(id).addEventListener('input', () => { COL[id] = +$(id).value; colorsChanged(false); });
+for (const id of ['skin', 'sat', 'shade', 'blur', 'cleanup', 'kN', 'blendM', 'gSteps', 'maxCols']) $(id).addEventListener('input', () => { COL[id] = +$(id).value; colorsChanged(false); });
 for (const id of ['autoLevels', 'realContours']) $(id).addEventListener('change', () => { COL[id] = $(id).checked; colorsChanged(false); });
 $('imgSrc').addEventListener('change', () => { COL.imgSrc = $('imgSrc').value; colorsChanged(false); ensureImagery().catch(() => {}); });
 $('filAdd').addEventListener('click', () => { const R = PAL(), t = Math.min(32, Math.max(0, ...R.fils.map(f => f.tool)) + 1); R.fils.push({ id: R.next++, name: 'New color', color: '#888888', tool: t, real: true }); colorsChanged(true); });
@@ -1139,7 +1252,7 @@ $('kBtn').addEventListener('click', async () => {
   try {
     await ensureImagery(); const p = params(), R = PAL();
     const m = computeModel(p, state.dem, null, Math.max(p.pitch, Math.sqrt(p.printW * p.printD / 60000)));
-    const px = adjustColors(imageryCells(p, m, state.img.sample), COL.autoLevels, COL.sat, COL.simple.hue, COL.simple.contrast);
+    const px = realPixels(p, m);
     const cen = kmeans(px, Math.max(2, Math.min(12, COL.kN)));
     const keep = new Set(Object.values(R.asg).map(Number));
     R.fils = R.fils.filter(f => !f.real || keep.has(f.id));
@@ -1481,11 +1594,14 @@ let realCache = null;
 const lerpLin = (h1, h2, t) => { const a = hex2rgb(h1), b = hex2rgb(h2), L = v => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }, S = v => 255 * (v <= 0.0031308 ? v * 12.92 : 1.055 * v ** (1 / 2.4) - 0.055); return rgb2hex(a.map((x, i) => S(L(x) + (L(b[i]) - L(x)) * t))); };
 // satellite colors: candidates = your "R" colors + their mixes (More colors) or every mix of the pack (Full Spectrum);
 // the most used ones (max. colors) are kept, every mix becomes a placeholder filament
+// photo -> per-cell RGB: shadows out, smoothed, then levels / saturation / hue / contrast
+const realPixels = (p, m) => adjustColors(deshadeCells(imageryCells(p, m, state.img.sample), m, m.nx - 1, m.ny - 1, (COL.shade ?? 100) / 100, COL.blur ?? 2),
+  COL.autoLevels, COL.sat, COL.simple.hue, COL.simple.contrast);
 function realCells(p, m) {
   const pal = PAL(), base = pal.fils.filter(f => f.real), use = base.length ? base : pal.fils;
-  const key = [state.img.key, m.nx, m.ny, COL.autoLevels, COL.sat, COL.simple.hue, COL.simple.contrast].join('|');
-  if (!realCache || realCache.key !== key) realCache = { key, px: adjustColors(imageryCells(p, m, state.img.sample), COL.autoLevels, COL.sat, COL.simple.hue, COL.simple.contrast) };
   const cw = m.nx - 1, ch = m.ny - 1;
+  const key = [state.img.key, m.nx, m.ny, COL.autoLevels, COL.sat, COL.simple.hue, COL.simple.contrast, COL.shade, COL.blur].join('|');
+  if (!realCache || realCache.key !== key) realCache = { key, px: realPixels(p, m) };
   let cand = use.map(f => ({ id: f.id, color: f.color }));
   if (COL.mode === 'fs') cand = FS.gamut(COL.fsEd).map((g, i) => ({ id: 7000 + i, name: 'Mix ' + g.recipe, color: g.hex, mix: true }));
   else if (COL.mode === 'multi' && COL.gSteps > 0) {
@@ -1495,11 +1611,11 @@ function realCells(p, m) {
     }
   }
   const lab = cand.map(c => ({ id: c.id, lab: rgb2lab(...hex2rgb(c.color)) }));
-  let C = quantizeCells(realCache.px, lab, cw, ch, 0);
+  let C = quantizeReal(realCache.px, lab, cw, ch);
   const cnt = new Map(); for (const v of C) cnt.set(v, (cnt.get(v) || 0) + 1);
   const keep = new Set([...cnt].sort((a, b) => b[1] - a[1]).slice(0, Math.max(2, COL.maxCols | 0)).map(e => e[0]));
-  if (keep.size < cnt.size) C = quantizeCells(realCache.px, lab.filter(q => keep.has(q.id)), cw, ch, 0);
-  if (COL.cleanup > 0) majority(C, cw, ch, COL.cleanup);
+  if (keep.size < cnt.size) C = quantizeReal(realCache.px, lab.filter(q => keep.has(q.id)), cw, ch);
+  if (COL.cleanup > 0) { majority(C, cw, ch, Math.min(2, COL.cleanup)); removeSmall(C, cw, ch, Math.round((0.35 * COL.cleanup / Math.max(m.dx, m.dy)) ** 2)); }
   const used = new Set(C); let t0 = Math.max(0, ...pal.fils.map(f => f.tool));
   state.virt = cand.filter(c => c.mix && used.has(c.id)).map(c => ({ id: c.id, name: c.name, color: c.color, tool: ++t0, mix: true }));
   return C;
@@ -1777,7 +1893,7 @@ const asgIds = () => { const A = PAL().asg; return { bld: +A.bld, base: +A.base,
 // ===== simple mode: your filaments in, 4 ready-made looks out =====
 COL.simple ??= { fils: [['Yellow', '#f6c21c'], ['Gray', '#a3a6aa'], ['Light blue', '#5fc3d6'], ['Black', '#17181b']], fs: false, ed: 'white', pick: 3 };
 COL.simple.hue ??= 0; COL.simple.contrast ??= 100;
-const S_FS = { white: [['Cyan', '#00C3FF'], ['Magenta', '#F54399'], ['Yellow', '#FAE727'], ['White', '#F2F2EF']], gray: [['Cyan', '#08ABFB'], ['Magenta', '#D93B90'], ['Yellow', '#F9ED3D'], ['Gray', '#A9A6A1']] };
+const S_FS = { white: [['Cyan', '#00C3FF'], ['Magenta', '#F54399'], ['Yellow', '#FAE727'], ['White', '#F2F2EF']], gray: [['Cyan', '#08ABFB'], ['Magenta', '#D93B90'], ['Yellow', '#F9ED3D'], ['Gray', '#A9A6A1']], black: [['Cyan', '#00C3FF'], ['Magenta', '#F54399'], ['Yellow', '#FAE727'], ['Black', '#1B1C1E']] };
 let EXPERT = false; try { EXPERT = localStorage.getItem('landscapeMakerExpert') === '1'; } catch (e) {}
 function applyExpert() {
   $('expert').checked = EXPERT; $('simple').classList.toggle('hide', EXPERT);
@@ -2272,7 +2388,7 @@ async function buildExport() {
   // buildings first: where they overlap the terrain, the slicer gives the first part priority
   let parts = bodies.map(b => { const f = filById(b.fil) || { name: 'filament', tool: 1 }; return { name: f.name, tool: f.tool, recipe: f.recipe, body: b.body, isBase: b.fil === base, isBld: !!A.extra && b.fil === bld }; });
   if (COL.mode === 'fs') {   // one part per tool: pure pack filament or one mix
-    const g = new Map(), pure = ['Cyan', 'Magenta', 'Yellow', COL.fsEd === 'gray' ? 'Gray' : 'White'];
+    const g = new Map(), pure = ['Cyan', 'Magenta', 'Yellow', { gray: 'Gray', black: 'Black' }[COL.fsEd] || 'White'];
     for (const x of parts) { if (!g.has(x.tool)) g.set(x.tool, { tool: x.tool, recipe: x.recipe, list: [], isBase: false, isBld: false }); const e = g.get(x.tool); e.list.push(x.body); e.isBase = e.isBase || x.isBase; e.isBld = e.isBld || x.isBld; }
     parts = [...g.values()].map(e => ({ name: e.tool <= 4 ? pure[e.tool - 1] : 'Mix ' + e.recipe, tool: e.tool, body: mergeBodies(e.list), isBase: e.isBase, isBld: e.isBld }));
   }

@@ -1,12 +1,13 @@
 // ===== Snapmaker PLA Full Spectrum pack: which colors can the slicer mix? =====
-// T1 Cyan, T2 Magenta, T3 Yellow, T4 White (White Edition) or Gray (Gray Edition).
+// T1 Cyan, T2 Magenta, T3 Yellow, T4 White (White Edition), Gray (Gray Edition) or Black (CMY + black spool).
 // Mix model: cyan/magenta/yellow layer subtractively (weighted geometric mean in linear RGB),
-// white/gray lightens or dulls the result (linear blend). Ratios in 10 % steps, max. 3 filaments per mix.
+// white/gray/black lightens, dulls or darkens the result (linear blend). Ratios in 10 % steps, max. 3 filaments per mix.
 // It is an approximation for choosing colors: the real result depends on TD values and layer height.
 window.FS = (() => {
   const ED = {
     white: { label: 'Full Spectrum White Edition', fils: [['Cyan', '#00C3FF', 'C'], ['Magenta', '#F54399', 'M'], ['Yellow', '#FAE727', 'Y'], ['White', '#F2F2EF', 'W']] },
     gray: { label: 'Full Spectrum Gray Edition', fils: [['Cyan', '#08ABFB', 'C'], ['Magenta', '#D93B90', 'M'], ['Yellow', '#F9ED3D', 'Y'], ['Gray', '#A9A6A1', 'G']] },
+    black: { label: 'CMY + Black', fils: [['Cyan', '#00C3FF', 'C'], ['Magenta', '#F54399', 'M'], ['Yellow', '#FAE727', 'Y'], ['Black', '#1B1C1E', 'K']] },
   };
   const hx = h => { const n = parseInt(String(h).slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
   const toLin = v => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
