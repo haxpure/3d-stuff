@@ -312,7 +312,7 @@
         <option value="esri">Esri World Imagery (sharp)</option>
         <option value="s2">Sentinel-2 cloudless (soft, even)</option>
       </select></div>
-      <label class="check"><input type="checkbox" id="autoLevels" checked> Auto-levels (stretch dark imagery)</label>
+      <label class="check"><input type="checkbox" id="autoLevels"> Auto-levels (stretch dark imagery)</label>
       <div class="row"><label>Saturation</label><div class="rng"><input type="range" id="sat" min="0.5" max="2.5" step="0.05" value="1.3"><output></output></div></div>
       <div class="row"><label>Remove shadows<small>takes the sun's shading out of the photo</small></label><div class="rng"><input type="range" id="shade" min="0" max="100" step="5" value="100"><output></output></div></div>
       <div class="row"><label>Smoothing<small>blurs fields, roofs and roads before matching</small></label><div class="rng"><input type="range" id="blur" min="0" max="5" step="1" value="1"><output></output></div></div>
@@ -2873,8 +2873,9 @@ function palFrom(P, hmin = 300, hmax = 2000) {
 let COL = null;
 try { COL = JSON.parse(localStorage.getItem('landscapeMakerColors3') || 'null'); } catch (e) {}
 if (!COL || !COL.custom || !COL.real || COL.custom.fils.length !== 4 || !['four', 'multi', 'fs'].includes(COL.mode))
-  COL = { mode: 'multi', style4: 'bands', styleN: 'real', custom: presetPal('alpine4', 350, 1450), real: presetPal('satellite', 350, 1450), skin: 0.6, imgSrc: 'esri', autoLevels: true, sat: 1.3, cleanup: 2, realContours: false, kN: 6, blendM: 80, gSteps: 3 };
-COL.blendM ??= 80; COL.gSteps ??= 3; COL.maxCols ??= 12; COL.shade ??= 100; COL.blur ??= 1; if (!COL.detailV) { COL.blur = Math.min(COL.blur, 1); COL.cleanup = Math.min(COL.cleanup ?? 1, 1); COL.detailV = 1; }   // finer defaults since v2 COL.fsEd ??= 'white'; if (!COL.fs) COL.fs = presetPal('grad8', 350, 1450);
+  COL = { mode: 'multi', style4: 'bands', styleN: 'real', custom: presetPal('alpine4', 350, 1450), real: presetPal('satellite', 350, 1450), skin: 0.6, imgSrc: 'esri', autoLevels: false, sat: 1.3, cleanup: 2, realContours: false, kN: 6, blendM: 80, gSteps: 3 };
+COL.blendM ??= 80; COL.gSteps ??= 3; COL.maxCols ??= 12; COL.shade ??= 100; COL.blur ??= 1; if (!COL.detailV) { COL.blur = Math.min(COL.blur, 1); COL.cleanup = Math.min(COL.cleanup ?? 1, 1); COL.detailV = 1; }   // finer defaults since v2
+if (COL.detailV < 2) { COL.autoLevels = false; COL.detailV = 2; }   // auto-levels brightened prints well past the photo: off by default COL.fsEd ??= 'white'; if (!COL.fs) COL.fs = presetPal('grad8', 350, 1450);
 const PAL = () => COL.mode === 'fs' ? COL.fs : COL.mode === 'multi' ? COL.real : COL.custom;
 // internal coloring mode: 'contour' | 'bands' | 'real'
 const imode = () => COL.mode === 'four' ? COL.style4 : (COL.styleN === 'real' ? 'real' : 'bands');
@@ -3832,30 +3833,29 @@ const FIL_CATALOG = [['Black', '#1b1c1e'], ['Charcoal', '#3a3b3d'], ['Dark gray'
   ['Dark green', '#24401f'], ['Forest green', '#2f5a2c'], ['Olive green', '#5f6b33'], ['Grass green', '#4f8a2b'], ['Sage green', '#8f9d7a'],
   ['Dark brown', '#4a3426'], ['Brown', '#7a5a3e'], ['Khaki', '#a39a6a'], ['Tan', '#b49a64'], ['Sand', '#c9b48a'], ['Beige', '#d8c8a8'],
   ['Terracotta', '#b0583a']];   // no blue: water has its own color, blue in the photo is haze or shadow
-// k-means on the photo (tiny clusters = outliers like roofs or markers are dropped), then the nearest catalog filament:
-// hue counts more than lightness and the photo's hazy colors get 1.4x chroma, so forest becomes a green, not a gray
+// Which 4 catalog filaments reproduce this photo best? The photo is reduced to 12 k-means colors (with their area),
+// then every set of 4 catalog colors is scored by how close each photo color gets to the set or to one of the mixes
+// the slicer makes between two of them (1/3, 2/3). Plain Lab distance: lightness counts fully, so the print keeps
+// the photo's brightness, and the set covers dark forest, meadows and rock instead of four similar dark tones.
 function recommendFilaments(px, k) {
-  let cen = kmeans(px, k);
-  for (let kk = k + 1; kk <= k + 4; kk++) {
-    const tot = cen.reduce((s, c) => s + c[3], 0) || 1;
-    if (cen.filter(c => c[3] / tot >= 0.03).length >= k) break;
-    cen = kmeans(px, kk);
+  const cen = kmeans(px, 12), tot = cen.reduce((s, c) => s + c[3], 0) || 1;
+  const P = cen.map(c => ({ lab: rgb2lab(c[0], c[1], c[2]), w: c[3] / tot }));
+  const cat = FIL_CATALOG.map(([name, hex]) => ({ name, hex, lab: rgb2lab(...hex2rgb(hex)) })), N = cat.length;
+  const mix = {};   // labs of the 1/3 and 2/3 mixes of every catalog pair
+  for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) mix[i * N + j] = [1 / 3, 2 / 3].map(t => rgb2lab(...hex2rgb(lerpLin(cat[i].hex, cat[j].hex, t))));
+  const d2 = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+  let best = null, bestErr = Infinity;
+  const idx = [0, 1, 2, 3];
+  for (idx[0] = 0; idx[0] < N; idx[0]++) for (idx[1] = idx[0] + 1; idx[1] < N; idx[1]++) for (idx[2] = idx[1] + 1; idx[2] < N; idx[2]++) for (idx[3] = idx[2] + 1; idx[3] < N; idx[3]++) {
+    const labs = idx.map(i => cat[i].lab);
+    for (let a = 0; a < k; a++) for (let b = a + 1; b < k; b++) labs.push(...mix[idx[a] * N + idx[b]]);
+    let err = 0; for (const q of P) { let m = Infinity; for (const l of labs) { const d = d2(q.lab, l); if (d < m) m = d; } err += q.w * m; if (err >= bestErr) break; }
+    if (err < bestErr) { bestErr = err; best = idx.slice(); }
   }
-  cen = cen.slice().sort((a, b) => b[3] - a[3]).slice(0, k);
-  const tot = cen.reduce((s, c) => s + c[3], 0) || 1;
-  const cat = FIL_CATALOG.map(([name, hex]) => { const lab = rgb2lab(...hex2rgb(hex)); return { name, hex, lab, C: Math.hypot(lab[1], lab[2]) }; }), used = new Set(), pick = [];
-  for (const c of cen) {   // biggest areas choose first, no duplicates
-    const L = rgb2lab(c[0], c[1], c[2]), a = L[1] * 1.4, b = L[2] * 1.4, C1 = Math.hypot(a, b), wh = 1.2 * Math.min(1, C1 / 20);
-    let best = null, bd = Infinity;
-    for (const q of cat) {
-      if (used.has(q.name)) continue;
-      const dC = C1 - q.C, da = a - q.lab[1], db = b - q.lab[2], d = 0.6 * (L[0] - q.lab[0]) ** 2 + dC * dC + wh * Math.max(0, da * da + db * db - dC * dC);
-      if (d < bd) { bd = d; best = q; }
-    }
-    used.add(best.name); pick.push({ name: best.name, hex: best.hex, share: c[3] / tot, lum: L[0] });
-  }
+  const pick = best.map(i => ({ name: cat[i].name, hex: cat[i].hex, share: 0, lum: cat[i].lab[0] }));
+  for (const q of P) { let bi = 0, bd = Infinity; best.forEach((ci, j) => { const d = d2(q.lab, cat[ci].lab); if (d < bd) { bd = d; bi = j; } }); pick[bi].share += q.w; }
   pick.sort((x, y) => x.lum - y.lum);
-  return { pick, cen };
+  return { pick };
 }
 let recKey = '', recPick = null;
 async function updateRecommendation(p, m) {
@@ -3864,7 +3864,7 @@ async function updateRecommendation(p, m) {
     await ensureImagery();
     const key = [state.img.key, p.lat, p.lon, p.areaKm, COL.shade, COL.blur, COL.autoLevels].join('|');
     if (key === recKey) return; recKey = key;
-    const { pick: picked, cen } = recommendFilaments(realPixels(p, m), 4), pick = picked;
+    const { pick } = recommendFilaments(realPixels(p, m), 4);
     recPick = pick.filter(Boolean);
     const box = $('sRecList'); box.innerHTML = '';
     for (const r of recPick) box.append(mk('div', { className: 'rec' }, mk('i', { style: 'background:' + r.hex }), mk('span', { textContent: r.name }), mk('small', { textContent: Math.round(r.share * 100) + ' %' })));
