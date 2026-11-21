@@ -189,6 +189,10 @@
   .sfil { display:grid; grid-template-columns:34px 1fr 40px; gap:8px; align-items:center; margin:5px 0; }
   .sfil input[type=color] { width:34px; height:28px; border:1px solid var(--line); border-radius:6px; background:none; padding:0; }
   .sfil .t { color:var(--mute); font-size:12px; text-align:right; }
+  .rec { display:grid; grid-template-columns:34px 1fr auto; gap:8px; align-items:center; margin:5px 0; font-size:13px; }
+  .rec i { display:block; width:34px; height:24px; border:1px solid var(--line); border-radius:6px; }
+  .rec small { color:var(--mute); font-size:11px; }
+  #sRecUse { width:100%; margin-top:6px; }
   .opts { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px; }
   .opt { background:#0f1115; border:1px solid var(--line); border-radius:8px; padding:6px; cursor:pointer; text-align:left; color:var(--text); font:inherit; width:100%; }
   .opt:hover { border-color:#4a5160; } .opt.on { border-color:var(--acc); box-shadow:0 0 0 1px var(--acc) inset; }
@@ -228,6 +232,12 @@
     <div id="sFils"></div>
     <label class="check"><input type="checkbox" id="sFS"> I have the Full Spectrum pack (CMY + White/Gray/Black)</label>
     <div class="row hide" id="sEdRow"><label>Pack</label><select id="sEd"><option value="white">White Edition</option><option value="gray">Gray Edition</option><option value="black">CMY + Black</option></select></div>
+    <div id="sRec" class="hide">
+      <h3>Recommended for this area</h3>
+      <div class="hint">The 4 filament colors that match the satellite photo best (shadows taken out). Buy or load these for the most natural look.</div>
+      <div id="sRecList"></div>
+      <button type="button" id="sRecUse" class="sec">Use these filaments</button>
+    </div>
     <h3>Suggestions</h3>
     <div id="sTune">
       <div class="row"><label>Hue</label><div class="rng"><input type="range" id="sHue" min="-180" max="180" step="5" value="0"><output></output></div></div>
@@ -572,7 +582,7 @@ window.FS = (() => {
     'Map style': 'Kartenstil', 'Like a city map: light ground, gray houses, colored roads, blue water.': 'Wie ein Stadtplan: heller Boden, graue Häuser, farbige Straßen, blaues Wasser.',
     'Night': 'Nacht', 'Dark ground, light houses and roads, your house glows.': 'Dunkler Boden, helle Häuser und Straßen, dein Haus leuchtet.',
     'Expert settings': 'Experten-Einstellungen', 'Your filaments': 'Deine Filamente', 'The colors loaded in your printer. The suggestions below are made from them.': 'Die Farben, die in deinem Drucker geladen sind. Daraus werden die Vorschläge unten erstellt.',
-    'I have the Full Spectrum pack (CMY + White/Gray)': 'Ich habe das Full-Spectrum-Set (CMY + Weiß/Grau)', 'I have the Full Spectrum pack (CMY + White/Gray/Black)': 'Ich habe das Full-Spectrum-Set (CMY + Weiß/Grau/Schwarz)', 'CMY + Black': 'CMY + Schwarz', 'Pack': 'Set', 'White Edition': 'White Edition', 'Gray Edition': 'Gray Edition',
+    'I have the Full Spectrum pack (CMY + White/Gray)': 'Ich habe das Full-Spectrum-Set (CMY + Weiß/Grau)', 'I have the Full Spectrum pack (CMY + White/Gray/Black)': 'Ich habe das Full-Spectrum-Set (CMY + Weiß/Grau/Schwarz)', 'CMY + Black': 'CMY + Schwarz', 'Recommended for this area': 'Empfohlen für dieses Gebiet', 'The 4 filament colors that match the satellite photo best (shadows taken out). Buy or load these for the most natural look.': 'Die 4 Filamentfarben, die am besten zum Satellitenbild passen (ohne Schatten). Für den natürlichsten Look diese kaufen bzw. einlegen.', 'Use these filaments': 'Diese Filamente verwenden', 'Pack': 'Set', 'White Edition': 'White Edition', 'Gray Edition': 'Gray Edition',
     'Suggestions': 'Vorschläge', 'Load terrain to see the suggestions.': 'Lade das Gelände, um die Vorschläge zu sehen.', 'Smooth gradient': 'Weicher Verlauf',
     'Natural terrain colors mixed from the pack.': 'Natürliche Geländefarben, aus dem Set gemischt.', 'Your colors with mixed transitions. The slicer mixes them.': 'Deine Farben mit gemischten Übergängen. Der Slicer mischt sie.',
     'Real colors from satellite imagery, mixed from the pack.': 'Echte Farben aus dem Satellitenbild, aus dem Set gemischt.', 'Real colors from satellite imagery, using your colors and their mixes.': 'Echte Farben aus dem Satellitenbild, aus deinen Farben und ihren Mischungen.',
@@ -2630,28 +2640,29 @@ function deshadeCells(px, m, cw, ch, strength, blur) {
   for (let i = 0; i < n; i++) { const q = lab2rgb(Lc[i], A[i], B[i]); for (let j = 0; j < 3; j++) out[i * 3 + j] = Math.max(0, Math.min(255, Math.round(q[j]))); }
   return out;
 }
-// Satellite matching. The photo's lightness range is first squeezed into the range the candidates can reach
-// (a pack without black has no dark greens: dark forest would otherwise pick the darkest mix, whatever its hue);
-// lifted colors get their chroma scaled up with them. The distance then weighs hue most, chroma and lightness less.
-function quantizeReal(px, palette, cw, ch, wL = 0.45, wC = 0.35, wH = 1.4) {
+// Satellite matching. Photo lightness outside the range the candidates can reach is squeezed into it (a pack
+// without black has no dark greens: dark forest would otherwise pick the darkest mix, whatever its hue);
+// lifted colors get their chroma scaled up with them. Hue counts more than lightness, but only for colorful
+// pixels: dull browns and grays must stay dull instead of jumping to the nearest bright hue.
+function quantizeReal(px, palette, cw, ch, wL = 0.45, wC = 1, wH = 1.2) {
   const n = cw * ch, C = new Int16Array(n), cache = new Map();
   const hist = new Uint32Array(101);
   for (let i = 0; i < n; i += 7) hist[Math.max(0, Math.min(100, Math.round(rgb2lab(px[i * 3], px[i * 3 + 1], px[i * 3 + 2])[0])))]++;
   const tot = hist.reduce((s, v) => s + v, 0), pct = q => { let s = 0; for (let k = 0; k <= 100; k++) if ((s += hist[k]) >= tot * q) return k; return 100; };
   const iLo = pct(0.02), iHi = Math.max(iLo + 10, pct(0.98));
   let pLo = 100, pHi = 0; for (const q of palette) { pLo = Math.min(pLo, q.lab[0]); pHi = Math.max(pHi, q.lab[0]); }
-  const sc = Math.min(1, (pHi - pLo) / (iHi - iLo)), mid = (pLo + pHi) / 2, imid = (iLo + iHi) / 2;
-  const mapL = L => Math.max(pLo, Math.min(pHi, mid + (L - imid) * sc));
+  const tLo = Math.max(iLo, pLo), tHi = Math.max(tLo + 1, Math.min(iHi, pHi));   // only squeeze what is out of reach
+  const mapL = L => Math.max(pLo, Math.min(pHi, tLo + (L - iLo) * (tHi - tLo) / (iHi - iLo)));
   const qC = palette.map(q => Math.hypot(q.lab[1], q.lab[2]));
   for (let i = 0; i < n; i++) {
     const r = px[i * 3], g = px[i * 3 + 1], b = px[i * 3 + 2], key = (r >> 2) << 12 | (g >> 2) << 6 | (b >> 2);
     let id = cache.get(key);
     if (id === undefined) {
       const L = rgb2lab(r, g, b), Lm = mapL(L[0]), f = Math.min(2.5, Math.max(1, (Lm + 10) / (L[0] + 10)));
-      const a = L[1] * f, bb = L[2] * f, C1 = Math.hypot(a, bb); let best = Infinity;
+      const a = L[1] * f, bb = L[2] * f, C1 = Math.hypot(a, bb), wh = wH * Math.min(1, C1 / 20); let best = Infinity;
       for (let k = 0; k < palette.length; k++) {
         const q = palette[k].lab, dC = C1 - qC[k], da = a - q[1], db = bb - q[2];
-        const d = wL * (Lm - q[0]) ** 2 + wC * dC * dC + wH * Math.max(0, da * da + db * db - dC * dC);
+        const d = wL * (Lm - q[0]) ** 2 + wC * dC * dC + wh * Math.max(0, da * da + db * db - dC * dC);
         if (d < best) { best = d; id = palette[k].id; }
       }
       cache.set(key, id);
@@ -3776,6 +3787,7 @@ function renderSuggestions() {
   if (key === sugKey) return; sugKey = key;
   $('sHint').classList.add('hide');
   const m = computeModel(p, state.dem, featsFor(), Math.max(p.printW / 110, p.pitch));
+  updateRecommendation(p, m);
   const orig = COL, savedVirt = state.virt, list = suggestionList(), needImg = [];
   box.innerHTML = '';
   list.forEach((o, k) => {
@@ -3795,6 +3807,55 @@ function renderSuggestions() {
   state.virt = savedVirt;
   if ((needImg.length || list.some(o => o.wantsImg)) && !state.img) ensureImagery().then(() => { queueSuggestions(true); refreshPick(); }).catch(() => {});
 }
+// ---- filament recommendation: the 4 colors of the satellite photo (after shade removal), named after common filaments ----
+const FIL_CATALOG = [['Black', '#1b1c1e'], ['Charcoal', '#3a3b3d'], ['Dark gray', '#5b5d60'], ['Gray', '#8e9094'], ['Light gray', '#c4c5c4'], ['White', '#f2f2ef'],
+  ['Dark green', '#24401f'], ['Forest green', '#2f5a2c'], ['Olive green', '#5f6b33'], ['Grass green', '#4f8a2b'], ['Sage green', '#8f9d7a'],
+  ['Dark brown', '#4a3426'], ['Brown', '#7a5a3e'], ['Khaki', '#a39a6a'], ['Tan', '#b49a64'], ['Sand', '#c9b48a'], ['Beige', '#d8c8a8'],
+  ['Terracotta', '#b0583a'], ['Teal', '#2f7f7a'], ['Blue', '#2c6bd6']];
+// k-means on the photo (tiny clusters = outliers like roofs or markers are dropped), then the nearest catalog filament:
+// hue counts more than lightness and the photo's hazy colors get 1.4x chroma, so forest becomes a green, not a gray
+function recommendFilaments(px, k) {
+  let cen = kmeans(px, k);
+  for (let kk = k + 1; kk <= k + 4; kk++) {
+    const tot = cen.reduce((s, c) => s + c[3], 0) || 1;
+    if (cen.filter(c => c[3] / tot >= 0.03).length >= k) break;
+    cen = kmeans(px, kk);
+  }
+  cen = cen.slice().sort((a, b) => b[3] - a[3]).slice(0, k);
+  const tot = cen.reduce((s, c) => s + c[3], 0) || 1;
+  const cat = FIL_CATALOG.map(([name, hex]) => { const lab = rgb2lab(...hex2rgb(hex)); return { name, hex, lab, C: Math.hypot(lab[1], lab[2]) }; }), used = new Set(), pick = [];
+  for (const c of cen) {   // biggest areas choose first, no duplicates
+    const L = rgb2lab(c[0], c[1], c[2]), a = L[1] * 1.4, b = L[2] * 1.4, C1 = Math.hypot(a, b), wh = 1.2 * Math.min(1, C1 / 20);
+    let best = null, bd = Infinity;
+    for (const q of cat) {
+      if (used.has(q.name)) continue;
+      const dC = C1 - q.C, da = a - q.lab[1], db = b - q.lab[2], d = 0.6 * (L[0] - q.lab[0]) ** 2 + dC * dC + wh * Math.max(0, da * da + db * db - dC * dC);
+      if (d < bd) { bd = d; best = q; }
+    }
+    used.add(best.name); pick.push({ name: best.name, hex: best.hex, share: c[3] / tot, lum: L[0] });
+  }
+  pick.sort((x, y) => x.lum - y.lum);
+  return { pick, cen };
+}
+let recKey = '', recPick = null;
+async function updateRecommendation(p, m) {
+  if (EXPERT) return;
+  try {
+    await ensureImagery();
+    const key = [state.img.key, p.lat, p.lon, p.areaKm, COL.shade, COL.blur, COL.autoLevels].join('|');
+    if (key === recKey) return; recKey = key;
+    const { pick: picked, cen } = recommendFilaments(realPixels(p, m), 4), pick = picked;
+    recPick = pick.filter(Boolean);
+    const box = $('sRecList'); box.innerHTML = '';
+    for (const r of recPick) box.append(mk('div', { className: 'rec' }, mk('i', { style: 'background:' + r.hex }), mk('span', { textContent: r.name }), mk('small', { textContent: Math.round(r.share * 100) + ' %' })));
+    $('sRec').classList.remove('hide');
+  } catch (e) { recKey = ''; console.warn('recommendation', e); }
+}
+$('sRecUse').addEventListener('click', () => {
+  if (!recPick) return;
+  COL.simple.fils = recPick.map(r => [r.name, r.hex]); COL.simple.fs = false; saveCOL();
+  renderSimpleFils(); queueSuggestions(true); applySuggestion(suggestionList().findIndex(o => o.title === 'Satellite colors'));
+});
 function applySuggestion(k) {
   const o = suggestionList()[k]; if (!o) return;
   o.set(COL); COL.simple.pick = k; colorsChanged(true);
