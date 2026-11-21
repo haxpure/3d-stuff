@@ -39,7 +39,10 @@
   function build() {
     const bar = document.createElement('div'); bar.id = 'repBtn';
     bar.innerHTML = '<button type="button" title="Report a problem with this tool">⚑ Report a problem</button>';
-    document.body.appendChild(bar);
+    // a page can offer a spot in its own header (<span id="repSlot">), otherwise float top right
+    const slot = document.getElementById('repSlot');
+    if (slot) { bar.id = 'repInline'; bar.firstChild.className = slot.dataset.cls || ''; slot.replaceWith(bar); }
+    else document.body.appendChild(bar);
     const dlg = document.createElement('div'); dlg.id = 'repDlg';
     dlg.innerHTML = `<div class="box" role="dialog" aria-modal="true">
       <button type="button" class="x" title="Close">×</button>
@@ -85,7 +88,7 @@
       $('repMsg').textContent = 'Copied. Paste it into a message to the owner.'; $('repMsg').className = 'ok';
     });
     // sit left of the DE/EN switch (it is added by the translator, maybe a bit later)
-    const place = () => { const sw = document.getElementById('langSw'); bar.style.right = (sw ? sw.getBoundingClientRect().width + 18 : 12) + 'px'; };
+    const place = () => { if (slot) return; const sw = document.getElementById('langSw'); bar.style.right = (sw ? sw.getBoundingClientRect().width + 18 : 12) + 'px'; };
     place(); setTimeout(place, 300); setTimeout(place, 1500); addEventListener('resize', place);
   }
   if (document.body) build(); else document.addEventListener('DOMContentLoaded', build);
