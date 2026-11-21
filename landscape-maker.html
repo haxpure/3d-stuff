@@ -3427,7 +3427,11 @@ function realCells(p, m) {
   const lab = cand.map(c => ({ id: c.id, lab: rgb2lab(...hex2rgb(c.color)) }));
   let C = quantizeReal(realCache.px, lab, cw, ch);
   const cnt = new Map(); for (const v of C) cnt.set(v, (cnt.get(v) || 0) + 1);
-  const keep = new Set([...cnt].sort((a, b) => b[1] - a[1]).slice(0, Math.max(2, COL.maxCols | 0)).map(e => e[0]));
+  // your own filaments always stay (they are loaded anyway); the limit only picks the most used mixes.
+  // With a slicer template the number of mixes is its number of mix slots (e.g. 4 filaments + 8 mixes).
+  const mixCap = COL.mode === 'multi' && TPL ? TPL.cfg.filament_is_mixed.filter(tplIsMix).length : Math.max(0, (COL.maxCols | 0) - (COL.mode === 'fs' ? 0 : use.length));
+  const baseIds = COL.mode === 'fs' ? [] : use.map(f => f.id);
+  const keep = new Set([...baseIds, ...[...cnt].filter(e => !baseIds.includes(e[0])).sort((a, b) => b[1] - a[1]).slice(0, COL.mode === 'fs' ? Math.max(2, COL.maxCols | 0) : mixCap).map(e => e[0])]);
   if (keep.size < cnt.size) C = quantizeReal(realCache.px, lab.filter(q => keep.has(q.id)), cw, ch);
   if (COL.cleanup > 0) { majority(C, cw, ch, Math.min(2, COL.cleanup)); removeSmall(C, cw, ch, Math.round((0.35 * COL.cleanup / Math.max(m.dx, m.dy)) ** 2)); }
   const used = new Set(C); let t0 = Math.max(0, ...pal.fils.map(f => f.tool));
@@ -3766,7 +3770,7 @@ function suggestionList() {
         if (S.fs) { c.mode = 'fs'; c.fsEd = S.ed; c.fs = palFrom(PRESETS.grad8, lo, hi); c.gSteps = 1; c.blendM = Math.round((hi - lo) / 10); }
         else { const nb = realBands(G, lo, hi, cq); c.mode = 'multi'; c.real = pal({}, nb); c.gSteps = S.noMix ? 0 : 3; c.blendM = Math.round((hi - lo) / Math.max(2, G.length) * 0.7); } }, wantsImg: true },
     { title: 'Satellite colors', desc: S.fs ? 'Real colors from satellite imagery, mixed from the pack.' : S.noMix ? 'Real colors from satellite imagery, printed with exactly your filaments.' : 'Real colors from satellite imagery, using your colors and their mixes.',
-      set: c => { c.realContours = false; c.styleN = 'real'; c.maxCols = 10;
+      set: c => { c.realContours = false; c.styleN = 'real'; c.maxCols = 12;
         if (S.fs) { c.mode = 'fs'; c.fsEd = S.ed; c.fs = palFrom(PRESETS.satellite, lo, hi); }
         else { c.mode = 'multi'; c.real = pal({}, bands(T)); c.gSteps = S.noMix ? 0 : 2; } }, needsImg: true },   // noMix: only the loaded filaments, no placeholder slots
   ];
@@ -4287,8 +4291,8 @@ async function loadTemplate(file) {
   try { localStorage.setItem('landscapeMakerTemplate', JSON.stringify(TPL)); } catch (e) { setStatus('Template loaded, but the browser could not store it: load it again after a reload.', true); }
   tplInfo();
 }
-$('tplFile').addEventListener('change', async e => { const f = e.target.files[0]; if (!f) return; try { await loadTemplate(f); setStatus(`Template ${f.name} loaded.`); } catch (err) { console.error(err); setStatus('Template: ' + err.message, true); } e.target.value = ''; });
-$('tplClear').addEventListener('click', () => { TPL = null; try { localStorage.removeItem('landscapeMakerTemplate'); } catch (e) {} tplInfo(); });
+$('tplFile').addEventListener('change', async e => { const f = e.target.files[0]; if (!f) return; try { await loadTemplate(f); setStatus(`Template ${f.name} loaded.`); colorsChanged(false); } catch (err) { console.error(err); setStatus('Template: ' + err.message, true); } e.target.value = ''; });
+$('tplClear').addEventListener('click', () => { TPL = null; try { localStorage.removeItem('landscapeMakerTemplate'); } catch (e) {} tplInfo(); colorsChanged(false); });
 tplInfo();
 // own filaments -> the template's physical slots in tool order; mix colors -> its mixed slots (components + ratio),
 // biggest mixes first; mixes beyond the free slots (and custom-color placeholders) take the nearest slot color
