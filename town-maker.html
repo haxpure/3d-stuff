@@ -7,8 +7,8 @@
 (function () {
   const REPO = 'haxpure/3d-stuff';
   const FILE = location.pathname.split('/').pop() || 'index.html';
-  const TOOL = { 'relief-maker.html': 'Relief Maker', 'town-maker.html': 'Town Maker', 'fin-studio.html': 'Fin Studio' }[FILE] || FILE;
-  const KEYS = { 'relief-maker.html': /^reliefMaker(?!Presets|Feat)/, 'town-maker.html': /^townMaker/ }[FILE] || null;
+  const TOOL = { 'relief-maker.html': 'Relief Maker', 'town-maker.html': 'Town Maker', 'landscape-maker.html': 'Landscape Maker', 'fin-studio.html': 'Fin Studio' }[FILE] || FILE;
+  const KEYS = { 'relief-maker.html': /^reliefMaker(?!Presets|Feat)/, 'town-maker.html': /^townMaker/, 'landscape-maker.html': /^landscapeMaker(?!Presets|Feat)/ }[FILE] || null;
   // keep the last script errors for the report
   const errs = [];
   addEventListener('error', e => { errs.push(String(e.message || e.error || 'error') + (e.filename ? ` @${e.filename.split('/').pop()}:${e.lineno}` : '')); if (errs.length > 5) errs.shift(); });
@@ -489,9 +489,26 @@ window.FS = (() => {
     'Pick any color per part. It is moved to the nearest mix the pack can make (approximate); every mix gets its own placeholder filament from T5. Set up the mixes in Snapmaker Orca → Color Mixing.': 'Wähle pro Teil eine beliebige Farbe. Sie wird auf die nächste Mischung gesetzt, die das Set schafft (ungefähr); jede Mischung bekommt ab T5 einen eigenen Filament-Platzhalter. Die Mischungen legst du in Snapmaker Orca → Color Mixing an.',
     'Nearest mix of the pack': 'Nächste Mischung des Sets', 'Wanted color': 'Gewünschte Farbe',
     'e.g. Hauptplatz 1, 8010 Graz': 'z. B. Hauptplatz 1, 8010 Graz', 'e.g. Schöckl, Graz  ·  Hauptplatz 1, 8010 Graz': 'z. B. Schöckl, Graz  ·  Hauptplatz 1, 8010 Graz',
+    // --- Landscape Maker ---
+    'Landscape Maker – terrain with 3D buildings to multi-color 3MF': 'Landscape Maker – Gelände mit 3D-Gebäuden als mehrfarbiges 3MF',
+    'Hills and towns together: real terrain with every building in 3D, as a multi-color 3MF.': 'Berge und Orte zusammen: echtes Gelände mit allen Gebäuden in 3D, als mehrfarbiges 3MF.',
+    'Radius (km)': 'Radius (km)', 'from the center to the edge of the map': 'von der Mitte bis zum Kartenrand', '3D buildings from OpenStreetMap': '3D-Gebäude aus OpenStreetMap',
+    '1 = real proportions': '1 = echte Proportionen', 'wider buildings get flat roofs': 'breitere Gebäude bekommen Flachdächer', 'Roof colors': 'Dachfarben',
+    'From the satellite image': 'Aus dem Satellitenbild', 'Typical (red, brown, gray)': 'Typisch (rot, braun, grau)', 'In the print': 'Im Druck', 'Print the buildings': 'Gebäude drucken',
+    'Shape': 'Form', 'Exact walls & roofs': 'Exakte Wände & Dächer', 'Blocks on the mesh grid': 'Blöcke auf dem Netzraster', 'so small houses still show up': 'damit auch kleine Häuser sichtbar bleiben',
+    'Building filament': 'Filament für Gebäude', 'Realistic': 'Realistisch', 'Print colors': 'Druckfarben', 'Shadows': 'Schatten', 'Building houses…': 'Erzeuge Häuser…',
+    'Buildings switched off.': 'Gebäude ausgeschaltet.',
   };
   // patterns for messages that contain numbers or names (applied in order)
   const R = [
+    // Landscape Maker building info (pieces of one line)
+    [/^Loading buildings: (\d+)\/(\d+) map tiles · ([\d\s]+) buildings so far…$/, 'Lade Gebäude: $1/$2 Kartenkacheln · bisher $3 Gebäude…'],
+    [/^Buildings could not be loaded \((.*)\)\. Press "Load terrain" to retry\.$/, 'Gebäude konnten nicht geladen werden ($1). „Gelände laden" für einen neuen Versuch.'],
+    [/^([\d\s]+) buildings(?= · | \(|$)/, '$1 Gebäude'],
+    [/\((\d+) map tiles failed — press "Load terrain" to retry\)/, '($1 Kartenkacheln fehlgeschlagen – „Gelände laden" für einen neuen Versuch)'],
+    [/ · a 10 m house is ([\d.]+) mm wide on the print\. /, ' · ein 10-m-Haus ist im Druck $1 mm breit. '],
+    [/Printed with exact walls and roofs\.$/, 'Gedruckt mit exakten Wänden und Dächern.'], [/Not printed\.$/, 'Wird nicht gedruckt.'],
+    [/Printed as blocks on the ([\d.]+) mm mesh grid \(at this scale houses are smaller than the nozzle\)\.$/, 'Gedruckt als Blöcke auf dem $1-mm-Netzraster (in diesem Maßstab sind Häuser kleiner als die Düse).'],
     [/^(.+) terrain with (.+) contour lines\.$/, 'Gelände in $1 mit Höhenlinien in $2.'],
     [/^Elevation tiles (\d+)\/(\d+) \(zoom (\d+)\)…$/, 'Höhendaten $1/$2 (Zoom $3)…'], [/^Imagery tiles (\d+)\/(\d+) \(zoom (\d+)\)…$/, 'Satellitenbild $1/$2 (Zoom $3)…'],
     [/^Found (\d+) matches — using the first, click another to switch\.$/, '$1 Treffer – der erste wird verwendet, klicke einen anderen zum Wechseln.'],

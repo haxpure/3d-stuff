@@ -15,11 +15,17 @@ for k, v in [('/*CORE*/', core), ('/*EARCUT*/', rd('earcut_inline.js')), ('/*TOW
              ('/*DEM*/', cut('const tileCache', 'const waterCache').replace('let z = 14;', 'let z = 15;')), ('/*LABEL*/', cut('async function textCanvas', '// ---------- 3D preview'))]:
     assert k in t, k; t = t.replace(k, v)
 open(os.path.join(R, 'town-maker.html'), 'w', encoding='utf-8').write(t.replace('<!--I18N-->', I18N))
+# Landscape Maker = Relief Maker terrain + 3D buildings (vector tile decoder from mvt.mjs, geometry in landscape_bld.mjs)
+mvt = rd('mvt.mjs'); mvt = mvt[:mvt.index('const ROAD_CLASS_W')]
+ls = rd('landscape_maker.html')
+for k, v in [('/*EARCUT*/', rd('earcut_inline.js')), ('/*MVT*/', mvt), ('/*BLDCORE*/', rd('landscape_bld.mjs'))]:
+    assert k in ls, k; ls = ls.replace(k, v)
+open(os.path.join(R, 'landscape-maker.html'), 'w', encoding='utf-8').write(ls.replace('<!--I18N-->', I18N))
 # Fin Studio is maintained as one self-contained file
 open(os.path.join(R, 'fin-studio.html'), 'w', encoding='utf-8').write(rd('fin_studio.html'))
 # "Report a problem" button in every tool (first in <head> so it also sees early script errors)
 REP = '<script>\n' + rd('report.js') + '</script>\n'
-for out in ['relief-maker.html', 'town-maker.html', 'fin-studio.html']:
+for out in ['relief-maker.html', 'town-maker.html', 'landscape-maker.html', 'fin-studio.html']:
     f = os.path.join(R, out); h = open(f, encoding='utf-8').read(); i = h.index('<head>') + len('<head>')
     open(f, 'w', encoding='utf-8').write(h[:i] + '\n' + REP + h[i:])
-print('built relief-maker.html, town-maker.html, fin-studio.html')
+print('built relief-maker.html, town-maker.html, landscape-maker.html, fin-studio.html')

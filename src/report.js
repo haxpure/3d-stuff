@@ -3,8 +3,8 @@
 (function () {
   const REPO = 'haxpure/3d-stuff';
   const FILE = location.pathname.split('/').pop() || 'index.html';
-  const TOOL = { 'relief-maker.html': 'Relief Maker', 'town-maker.html': 'Town Maker', 'fin-studio.html': 'Fin Studio' }[FILE] || FILE;
-  const KEYS = { 'relief-maker.html': /^reliefMaker(?!Presets|Feat)/, 'town-maker.html': /^townMaker/ }[FILE] || null;
+  const TOOL = { 'relief-maker.html': 'Relief Maker', 'town-maker.html': 'Town Maker', 'landscape-maker.html': 'Landscape Maker', 'fin-studio.html': 'Fin Studio' }[FILE] || FILE;
+  const KEYS = { 'relief-maker.html': /^reliefMaker(?!Presets|Feat)/, 'town-maker.html': /^townMaker/, 'landscape-maker.html': /^landscapeMaker(?!Presets|Feat)/ }[FILE] || null;
   // keep the last script errors for the report
   const errs = [];
   addEventListener('error', e => { errs.push(String(e.message || e.error || 'error') + (e.filename ? ` @${e.filename.split('/').pop()}:${e.lineno}` : '')); if (errs.length > 5) errs.shift(); });
