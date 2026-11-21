@@ -298,14 +298,15 @@
 
 <script>
 // ===== Snapmaker PLA Full Spectrum pack: which colors can the slicer mix? =====
-// T1 Cyan, T2 Magenta, T3 Yellow, T4 White (White Edition) or Gray (Gray Edition).
+// T1 Cyan, T2 Magenta, T3 Yellow, T4 White (White Edition), Gray (Gray Edition) or Black (CMY + black spool).
 // Mix model: cyan/magenta/yellow layer subtractively (weighted geometric mean in linear RGB),
-// white/gray lightens or dulls the result (linear blend). Ratios in 10 % steps, max. 3 filaments per mix.
+// white/gray/black lightens, dulls or darkens the result (linear blend). Ratios in 10 % steps, max. 3 filaments per mix.
 // It is an approximation for choosing colors: the real result depends on TD values and layer height.
 window.FS = (() => {
   const ED = {
     white: { label: 'Full Spectrum White Edition', fils: [['Cyan', '#00C3FF', 'C'], ['Magenta', '#F54399', 'M'], ['Yellow', '#FAE727', 'Y'], ['White', '#F2F2EF', 'W']] },
     gray: { label: 'Full Spectrum Gray Edition', fils: [['Cyan', '#08ABFB', 'C'], ['Magenta', '#D93B90', 'M'], ['Yellow', '#F9ED3D', 'Y'], ['Gray', '#A9A6A1', 'G']] },
+    black: { label: 'CMY + Black', fils: [['Cyan', '#00C3FF', 'C'], ['Magenta', '#F54399', 'M'], ['Yellow', '#FAE727', 'Y'], ['Black', '#1B1C1E', 'K']] },
   };
   const hx = h => { const n = parseInt(String(h).slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
   const toLin = v => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
@@ -397,7 +398,7 @@ window.FS = (() => {
     'Mix steps per transition': 'Mischstufen pro Übergang', 'extra placeholder colors in the 3MF': 'zusätzliche Platzhalterfarben im 3MF', 'Steep slopes': 'Steile Hänge',
     'Steeper than (°)': 'Steiler als (°)', 'real slope, before exaggeration': 'echte Neigung, vor der Überhöhung', 'Imagery': 'Satellitenbild', 'Esri World Imagery (sharp)': 'Esri World Imagery (scharf)',
     'Sentinel-2 cloudless (soft, even)': 'Sentinel-2 cloudless (weich, gleichmäßig)', 'Auto-levels (stretch dark imagery)': 'Auto-Tonwert (dunkle Bilder aufhellen)', 'Saturation': 'Sättigung',
-    'Cleanup': 'Bereinigung', 'removes single-pixel speckles': 'entfernt einzelne Pixel-Sprenkel', 'Draw contour lines on top': 'Höhenlinien darüber zeichnen',
+    'Cleanup': 'Bereinigung', 'removes single-pixel speckles': 'entfernt einzelne Pixel-Sprenkel', 'merges small patches (0.35 mm per step)': 'verschmilzt kleine Flecken (0,35 mm pro Stufe)', 'Remove shadows': 'Schatten entfernen', "takes the sun's shading out of the photo": 'nimmt die Sonnenschatten aus dem Foto', 'Smoothing': 'Glätten', 'blurs fields, roofs and roads before matching': 'verwischt Felder, Dächer und Straßen vor dem Zuordnen', 'Draw contour lines on top': 'Höhenlinien darüber zeichnen',
     'Filaments from imagery': 'Farben aus dem Satellitenbild', 'replaces the "R" filaments': 'ersetzt die „R"-Farben', 'Create': 'Erzeugen', 'Color skin (mm)': 'Farbschicht (mm)',
     'depth of the colored surface layer': 'Tiefe der farbigen Oberflächenschicht', 'Assignments': 'Zuordnung', 'Base plate': 'Sockel', 'Inner core': 'Innerer Kern',
     'hidden inside, under the color skin': 'innen versteckt, unter der Farbschicht', 'Contours & label text': 'Höhenlinien & Beschriftung', 'Trails': 'Wege', 'POI markers': 'POI-Markierungen',
@@ -470,7 +471,7 @@ window.FS = (() => {
     'Map style': 'Kartenstil', 'Like a city map: light ground, gray houses, colored roads, blue water.': 'Wie ein Stadtplan: heller Boden, graue Häuser, farbige Straßen, blaues Wasser.',
     'Night': 'Nacht', 'Dark ground, light houses and roads, your house glows.': 'Dunkler Boden, helle Häuser und Straßen, dein Haus leuchtet.',
     'Expert settings': 'Experten-Einstellungen', 'Your filaments': 'Deine Filamente', 'The colors loaded in your printer. The suggestions below are made from them.': 'Die Farben, die in deinem Drucker geladen sind. Daraus werden die Vorschläge unten erstellt.',
-    'I have the Full Spectrum pack (CMY + White/Gray)': 'Ich habe das Full-Spectrum-Set (CMY + Weiß/Grau)', 'Pack': 'Set', 'White Edition': 'White Edition', 'Gray Edition': 'Gray Edition',
+    'I have the Full Spectrum pack (CMY + White/Gray)': 'Ich habe das Full-Spectrum-Set (CMY + Weiß/Grau)', 'I have the Full Spectrum pack (CMY + White/Gray/Black)': 'Ich habe das Full-Spectrum-Set (CMY + Weiß/Grau/Schwarz)', 'CMY + Black': 'CMY + Schwarz', 'Pack': 'Set', 'White Edition': 'White Edition', 'Gray Edition': 'Gray Edition',
     'Suggestions': 'Vorschläge', 'Load terrain to see the suggestions.': 'Lade das Gelände, um die Vorschläge zu sehen.', 'Smooth gradient': 'Weicher Verlauf',
     'Natural terrain colors mixed from the pack.': 'Natürliche Geländefarben, aus dem Set gemischt.', 'Your colors with mixed transitions. The slicer mixes them.': 'Deine Farben mit gemischten Übergängen. Der Slicer mischt sie.',
     'Real colors from satellite imagery, mixed from the pack.': 'Echte Farben aus dem Satellitenbild, aus dem Set gemischt.', 'Real colors from satellite imagery, using your colors and their mixes.': 'Echte Farben aus dem Satellitenbild, aus deinen Farben und ihren Mischungen.',
@@ -483,7 +484,7 @@ window.FS = (() => {
     'Font color': 'Schriftfarbe', 'Automatic': 'Automatisch', 'Custom color': 'Eigene Farbe', 'Custom font color': 'Eigene Schriftfarbe', 'own filament slot in the 3MF': 'eigener Filament-Platz im 3MF',
     'Remove the middle POI': 'Mitte-POI entfernen', 'middle of the map': 'Kartenmitte',
     // --- Full Spectrum mode ---
-    'Full Spectrum pack (CMY + W/G)': 'Full-Spectrum-Set (CMY + W/G)', 'Filament pack': 'Filament-Set', 'T1 Cyan · T2 Magenta · T3 Yellow · T4 White / Gray': 'T1 Cyan · T2 Magenta · T3 Gelb · T4 Weiß / Grau',
+    'Full Spectrum pack (CMY + W/G)': 'Full-Spectrum-Set (CMY + W/G)', 'Filament pack': 'Filament-Set', 'T1 Cyan · T2 Magenta · T3 Yellow · T4 White / Gray': 'T1 Cyan · T2 Magenta · T3 Gelb · T4 Weiß / Grau', 'T1 Cyan · T2 Magenta · T3 Yellow · T4 White / Gray / Black': 'T1 Cyan · T2 Magenta · T3 Gelb · T4 Weiß / Grau / Schwarz',
     'Full Spectrum White Edition': 'Full Spectrum White Edition', 'Full Spectrum Gray Edition': 'Full Spectrum Gray Edition', 'Your colors (Full Spectrum)': 'Deine Farben (Full Spectrum)',
     'Pick any colors. Each one is moved to the nearest mix the pack can make (shown on the right, approximate). Set up those mixes in Snapmaker Orca → Color Mixing. Pure white (Gray Edition) and black cannot be mixed.': 'Wähle beliebige Farben. Jede wird auf die nächste Mischung gesetzt, die das Set schafft (rechts angezeigt, ungefähr). Diese Mischungen legst du in Snapmaker Orca → Color Mixing an. Reines Weiß (Gray Edition) und Schwarz lassen sich nicht mischen.',
     'Pick any color per part. It is moved to the nearest mix the pack can make (approximate); every mix gets its own placeholder filament from T5. Set up the mixes in Snapmaker Orca → Color Mixing.': 'Wähle pro Teil eine beliebige Farbe. Sie wird auf die nächste Mischung gesetzt, die das Set schafft (ungefähr); jede Mischung bekommt ab T5 einen eigenen Filament-Platzhalter. Die Mischungen legst du in Snapmaker Orca → Color Mixing an.',
