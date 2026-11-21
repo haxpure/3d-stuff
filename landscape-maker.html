@@ -2630,28 +2630,29 @@ function deshadeCells(px, m, cw, ch, strength, blur) {
   for (let i = 0; i < n; i++) { const q = lab2rgb(Lc[i], A[i], B[i]); for (let j = 0; j < 3; j++) out[i * 3 + j] = Math.max(0, Math.min(255, Math.round(q[j]))); }
   return out;
 }
-// Satellite matching. The photo's lightness range is first squeezed into the range the candidates can reach
-// (a pack without black has no dark greens: dark forest would otherwise pick the darkest mix, whatever its hue);
-// lifted colors get their chroma scaled up with them. The distance then weighs hue most, chroma and lightness less.
-function quantizeReal(px, palette, cw, ch, wL = 0.45, wC = 0.35, wH = 1.4) {
+// Satellite matching. Photo lightness outside the range the candidates can reach is squeezed into it (a pack
+// without black has no dark greens: dark forest would otherwise pick the darkest mix, whatever its hue);
+// lifted colors get their chroma scaled up with them. Hue counts more than lightness, but only for colorful
+// pixels: dull browns and grays must stay dull instead of jumping to the nearest bright hue.
+function quantizeReal(px, palette, cw, ch, wL = 0.45, wC = 1, wH = 1.2) {
   const n = cw * ch, C = new Int16Array(n), cache = new Map();
   const hist = new Uint32Array(101);
   for (let i = 0; i < n; i += 7) hist[Math.max(0, Math.min(100, Math.round(rgb2lab(px[i * 3], px[i * 3 + 1], px[i * 3 + 2])[0])))]++;
   const tot = hist.reduce((s, v) => s + v, 0), pct = q => { let s = 0; for (let k = 0; k <= 100; k++) if ((s += hist[k]) >= tot * q) return k; return 100; };
   const iLo = pct(0.02), iHi = Math.max(iLo + 10, pct(0.98));
   let pLo = 100, pHi = 0; for (const q of palette) { pLo = Math.min(pLo, q.lab[0]); pHi = Math.max(pHi, q.lab[0]); }
-  const sc = Math.min(1, (pHi - pLo) / (iHi - iLo)), mid = (pLo + pHi) / 2, imid = (iLo + iHi) / 2;
-  const mapL = L => Math.max(pLo, Math.min(pHi, mid + (L - imid) * sc));
+  const tLo = Math.max(iLo, pLo), tHi = Math.max(tLo + 1, Math.min(iHi, pHi));   // only squeeze what is out of reach
+  const mapL = L => Math.max(pLo, Math.min(pHi, tLo + (L - iLo) * (tHi - tLo) / (iHi - iLo)));
   const qC = palette.map(q => Math.hypot(q.lab[1], q.lab[2]));
   for (let i = 0; i < n; i++) {
     const r = px[i * 3], g = px[i * 3 + 1], b = px[i * 3 + 2], key = (r >> 2) << 12 | (g >> 2) << 6 | (b >> 2);
     let id = cache.get(key);
     if (id === undefined) {
       const L = rgb2lab(r, g, b), Lm = mapL(L[0]), f = Math.min(2.5, Math.max(1, (Lm + 10) / (L[0] + 10)));
-      const a = L[1] * f, bb = L[2] * f, C1 = Math.hypot(a, bb); let best = Infinity;
+      const a = L[1] * f, bb = L[2] * f, C1 = Math.hypot(a, bb), wh = wH * Math.min(1, C1 / 20); let best = Infinity;
       for (let k = 0; k < palette.length; k++) {
         const q = palette[k].lab, dC = C1 - qC[k], da = a - q[1], db = bb - q[2];
-        const d = wL * (Lm - q[0]) ** 2 + wC * dC * dC + wH * Math.max(0, da * da + db * db - dC * dC);
+        const d = wL * (Lm - q[0]) ** 2 + wC * dC * dC + wh * Math.max(0, da * da + db * db - dC * dC);
         if (d < best) { best = d; id = palette[k].id; }
       }
       cache.set(key, id);
