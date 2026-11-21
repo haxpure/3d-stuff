@@ -3696,7 +3696,7 @@ const asgIds = () => { const A = PAL().asg; return { bld: +A.bld, base: +A.base,
 
 // ===== simple mode: your filaments in, 4 ready-made looks out =====
 COL.simple ??= { fils: [['Yellow', '#f6c21c'], ['Gray', '#a3a6aa'], ['Light blue', '#5fc3d6'], ['Black', '#17181b']], fs: false, ed: 'white', pick: 3 };
-COL.simple.noMix ??= true;
+COL.simple.noMix ??= false;
 COL.simple.hue ??= 0; COL.simple.contrast ??= 100;
 const S_FS = { white: [['Cyan', '#00C3FF'], ['Magenta', '#F54399'], ['Yellow', '#FAE727'], ['White', '#F2F2EF']], gray: [['Cyan', '#08ABFB'], ['Magenta', '#D93B90'], ['Yellow', '#F9ED3D'], ['Gray', '#A9A6A1']], black: [['Cyan', '#00C3FF'], ['Magenta', '#F54399'], ['Yellow', '#FAE727'], ['Black', '#1B1C1E']] };
 let EXPERT = false; try { EXPERT = localStorage.getItem('landscapeMakerExpert') === '1'; } catch (e) {}
