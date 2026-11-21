@@ -395,6 +395,8 @@
     <div class="row hide" id="rowLabelColor"><label>Custom font color<small id="labelColorHint"></small></label><input type="color" id="labelColor" value="#ffffff" style="width:100%;height:30px;border:1px solid var(--line);border-radius:6px;background:none;padding:0"></div>
   </details>
 
+  <div class="row"><label>Slicer template (.3mf)<small>a project saved in your Orca: printer, process, filaments and mixed-color slots</small></label><div style="display:grid;grid-template-columns:1fr auto;gap:6px"><input type="file" id="tplFile" accept=".3mf"><button type="button" id="tplClear" class="sec hide" style="padding:6px 10px">Remove</button></div></div>
+  <div id="tplInfo" class="sub" style="margin-bottom:8px"></div>
   <div class="btns"><button id="dl3mf" disabled>Download 3MF</button><button id="dlStl" class="sec" disabled>STLs (zip)</button></div>
   <div id="exportInfo" class="sub" style="margin-top:8px"></div>
   <div class="attr">Elevation: <a href="https://registry.opendata.aws/terrain-tiles/" target="_blank">AWS Terrain Tiles</a> (Mapzen). Buildings (via <a href="https://openfreemap.org" target="_blank">OpenFreeMap</a>), water, routes, peaks: © <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors (building heights from OSM tags, otherwise estimated). Map &amp; imagery: Esri, Maxar, Earthstar Geographics; Sentinel-2 cloudless by <a href="https://s2maps.eu" target="_blank">EOX</a> (CC BY-NC-SA 4.0, non-commercial). Print with the layer height above so contour lines and bands land on whole layers.</div>
@@ -583,7 +585,7 @@ window.FS = (() => {
     'Map style': 'Kartenstil', 'Like a city map: light ground, gray houses, colored roads, blue water.': 'Wie ein Stadtplan: heller Boden, graue Häuser, farbige Straßen, blaues Wasser.',
     'Night': 'Nacht', 'Dark ground, light houses and roads, your house glows.': 'Dunkler Boden, helle Häuser und Straßen, dein Haus leuchtet.',
     'Expert settings': 'Experten-Einstellungen', 'Your filaments': 'Deine Filamente', 'The colors loaded in your printer. The suggestions below are made from them.': 'Die Farben, die in deinem Drucker geladen sind. Daraus werden die Vorschläge unten erstellt.',
-    'I have the Full Spectrum pack (CMY + White/Gray)': 'Ich habe das Full-Spectrum-Set (CMY + Weiß/Grau)', 'I have the Full Spectrum pack (CMY + White/Gray/Black)': 'Ich habe das Full-Spectrum-Set (CMY + Weiß/Grau/Schwarz)', 'CMY + Black': 'CMY + Schwarz', 'Recommended for this area': 'Empfohlen für dieses Gebiet', 'The 4 filament colors that match the satellite photo best (shadows taken out). Buy or load these for the most natural look.': 'Die 4 Filamentfarben, die am besten zum Satellitenbild passen (ohne Schatten). Für den natürlichsten Look diese kaufen bzw. einlegen.', 'Use these filaments': 'Diese Filamente verwenden', 'Pack': 'Set', 'White Edition': 'White Edition', 'Gray Edition': 'Gray Edition',
+    'I have the Full Spectrum pack (CMY + White/Gray)': 'Ich habe das Full-Spectrum-Set (CMY + Weiß/Grau)', 'I have the Full Spectrum pack (CMY + White/Gray/Black)': 'Ich habe das Full-Spectrum-Set (CMY + Weiß/Grau/Schwarz)', 'CMY + Black': 'CMY + Schwarz', 'Slicer template (.3mf)': 'Slicer-Vorlage (.3mf)', 'a project saved in your Orca: printer, process, filaments and mixed-color slots': 'ein in deinem Orca gespeichertes Projekt: Drucker, Prozess, Filamente und Mischfarben-Plätze', 'Remove': 'Entfernen', 'No template: the 3MF has plain filament slots, mix colors as extra filaments.': 'Keine Vorlage: Die 3MF hat einfache Filament-Plätze, Mischfarben als zusätzliche Filamente.', 'Recommended for this area': 'Empfohlen für dieses Gebiet', 'The 4 filament colors that match the satellite photo best (shadows taken out). Buy or load these for the most natural look.': 'Die 4 Filamentfarben, die am besten zum Satellitenbild passen (ohne Schatten). Für den natürlichsten Look diese kaufen bzw. einlegen.', 'Use these filaments': 'Diese Filamente verwenden', 'Pack': 'Set', 'White Edition': 'White Edition', 'Gray Edition': 'Gray Edition',
     'Suggestions': 'Vorschläge', 'Load terrain to see the suggestions.': 'Lade das Gelände, um die Vorschläge zu sehen.', 'Smooth gradient': 'Weicher Verlauf',
     'Natural terrain colors mixed from the pack.': 'Natürliche Geländefarben, aus dem Set gemischt.', 'Your colors with mixed transitions. The slicer mixes them.': 'Deine Farben mit gemischten Übergängen. Der Slicer mischt sie.',
     'Real colors from satellite imagery, mixed from the pack.': 'Echte Farben aus dem Satellitenbild, aus dem Set gemischt.', 'Real colors from satellite imagery, using your colors and their mixes.': 'Echte Farben aus dem Satellitenbild, aus deinen Farben und ihren Mischungen.', 'Real colors from satellite imagery, printed with exactly your filaments.': 'Echte Farben aus dem Satellitenbild, gedruckt mit genau deinen Filamenten.', 'Only my filaments (no mix colors to set up in the slicer)': 'Nur meine Filamente (keine Mischfarben im Slicer einrichten)',
@@ -655,6 +657,13 @@ window.FS = (() => {
     [/^(\d+) colors from low to high, water in (.+)\. One color swap per band\.$/, '$1 Farben von tief nach hoch, Wasser in $2. Ein Farbwechsel pro Stufe.'],
     [/^(\d+) colors from low to high\. One color swap per band\.$/, '$1 Farben von tief nach hoch. Ein Farbwechsel pro Stufe.'],
     [/^Preview at ([\d.]+) mm, export at ([\d.]+) mm$/, 'Vorschau mit $1 mm, Export mit $2 mm'],
+    [/^Template (.+): (.+) · (\d+) filaments \+ (\d+) mix slots\. The 3MF uses its printer, process and filament profiles\.$/, 'Vorlage $1: $2 · $3 Filamente + $4 Mischfarben-Plätze. Die 3MF übernimmt Drucker-, Prozess- und Filamentprofile daraus.'],
+    [/^Template (.+) loaded\.$/, 'Vorlage $1 geladen.'], [/^Template: /, 'Vorlage: '],
+    [/^3MF: (\d+) parts, ([\d.]+) M triangles, ([\d.]+) MB\. Built on (.+?): filaments and (\d+) mix colors are set, nothing to set up in Orca\.(.*)$/, '3MF: $1 Teile, $2 Mio. Dreiecke, $3 MB. Auf Basis von $4: Filamente und $5 Mischfarben sind eingetragen, in Orca ist nichts mehr einzurichten.$6'],
+    [/The template has (\d+) mix slots, (\d+) mix colors are used: the (\d+) smallest take the nearest color\. Save a template with (\d+) mix slots for all of them\./, 'Die Vorlage hat $1 Mischfarben-Plätze, verwendet werden $2: die $3 kleinsten bekommen die nächstliegende Farbe. Für alle: Vorlage mit $4 Mischfarben speichern.'],
+    [/the template has (\d+) filaments, (\d+) are needed: add filaments in Orca and save the template again/, 'die Vorlage hat $1 Filamente, gebraucht werden $2: in Orca Filamente hinzufügen und die Vorlage neu speichern'],
+    [/no project settings inside: save it as a project in Orca \(File > Save project\)/, 'keine Projekteinstellungen enthalten: in Orca als Projekt speichern (Datei > Projekt speichern)'],
+    [/this slicer version has no mixed filaments \(filament_is_mixed missing\)/, 'diese Slicer-Version kennt keine Mischfilamente (filament_is_mixed fehlt)'],
   ];
   const norm = s => s.replace(/\s+/g, ' ').trim();
   const tr = s => {
@@ -2743,7 +2752,7 @@ function concatU8(parts) { let n = 0; for (const p of parts) n += p.length; cons
 const uuid = () => 'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/x/g, () => (Math.random() * 16 | 0).toString(16));
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 
-function build3MF(parts, p, title) {   // parts: [{name, body, tool}]
+function build3MF(parts, p, title, tpl = null) {   // parts: [{name, body, tool, slot?}]; tpl: slicer template (see applyTemplate)
   const NS = 'xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:BambuStudio="http://schemas.bambulab.com/package/2021" xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06" requiredextensions="p"';
   const obj = [enc.encode(`<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" xml:lang="en-US" ${NS}>\n<metadata name="BambuStudio:3mfVersion">1</metadata>\n<resources>\n`)];
   parts.forEach((pt, i) => {
@@ -2757,11 +2766,11 @@ function build3MF(parts, p, title) {   // parts: [{name, body, tool}]
   obj.push(enc.encode('</resources>\n<build/>\n</model>\n'));
   const gid = parts.length + 1, I = '1 0 0 0 1 0 0 0 1 0 0 0';
   const tx = (p.bed / 2 - p.printW / 2).toFixed(3), ty = (p.bed / 2 - (p.printD - p.strip) / 2).toFixed(3);
-  let main = `<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" xml:lang="en-US" ${NS}>\n<metadata name="Application">BambuStudio-01.10.02.76</metadata>\n<metadata name="BambuStudio:3mfVersion">1</metadata>\n<metadata name="Title">${esc(title)}</metadata>\n<resources>\n<object id="${gid}" p:UUID="${uuid()}" type="model"><components>\n`;
+  let main = `<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" xml:lang="en-US" ${NS}>\n<metadata name="Application">${esc(tpl ? tpl.app : 'BambuStudio-01.10.02.76')}</metadata>\n${tpl && tpl.orca ? `<metadata name="OrcaSlicer">${esc(tpl.orca)}</metadata>\n` : ''}<metadata name="BambuStudio:3mfVersion">1</metadata>\n<metadata name="Title">${esc(title)}</metadata>\n<resources>\n<object id="${gid}" p:UUID="${uuid()}" type="model"><components>\n`;
   parts.forEach((pt, i) => { main += `<component p:path="/3D/Objects/object_1.model" objectid="${i + 1}" p:UUID="${uuid()}" transform="${I}"/>\n`; });
   main += `</components></object>\n</resources>\n<build p:UUID="${uuid()}"><item objectid="${gid}" p:UUID="${uuid()}" transform="1 0 0 0 1 0 0 0 1 ${tx} ${ty} 0" printable="1"/></build>\n</model>\n`;
-  let cfg = `<?xml version="1.0" encoding="UTF-8"?>\n<config>\n  <object id="${gid}">\n    <metadata key="name" value="${esc(title)}"/>\n    <metadata key="extruder" value="${parts[0] ? parts[0].tool : 1}"/>\n`;
-  parts.forEach((pt, i) => { cfg += `    <part id="${i + 1}" subtype="normal_part">\n      <metadata key="name" value="${esc(pt.name)}"/>\n      <metadata key="matrix" value="1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"/>\n      <metadata key="extruder" value="${pt.tool}"/>\n    </part>\n`; });
+  let cfg = `<?xml version="1.0" encoding="UTF-8"?>\n<config>\n  <object id="${gid}">\n    <metadata key="name" value="${esc(title)}"/>\n    <metadata key="extruder" value="${parts[0] ? (parts[0].slot || parts[0].tool) : 1}"/>\n`;
+  parts.forEach((pt, i) => { cfg += `    <part id="${i + 1}" subtype="normal_part">\n      <metadata key="name" value="${esc(pt.name)}"/>\n      <metadata key="matrix" value="1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"/>\n      <metadata key="extruder" value="${pt.slot || pt.tool}"/>\n    </part>\n`; });
   cfg += `  </object>\n  <plate>\n    <metadata key="plater_id" value="1"/>\n    <metadata key="plater_name" value=""/>\n    <metadata key="locked" value="false"/>\n    <model_instance>\n      <metadata key="object_id" value="${gid}"/>\n      <metadata key="instance_id" value="0"/>\n      <metadata key="identify_id" value="1"/>\n    </model_instance>\n  </plate>\n  <assemble>\n   <assemble_item object_id="${gid}" instance_id="0" transform="1 0 0 0 1 0 0 0 1 ${tx} ${ty} 0" offset="0 0 0" />\n  </assemble>\n</config>\n`;
   return {
     '[Content_Types].xml': enc.encode('<?xml version="1.0" encoding="UTF-8"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/><Default Extension="png" ContentType="image/png"/></Types>'),
@@ -2770,6 +2779,7 @@ function build3MF(parts, p, title) {   // parts: [{name, body, tool}]
     '3D/3dmodel.model': enc.encode(main),
     '3D/Objects/object_1.model': concatU8(obj),
     'Metadata/model_settings.config': enc.encode(cfg),
+    ...(tpl && tpl.out ? { 'Metadata/project_settings.config': enc.encode(JSON.stringify(tpl.out, null, 4)) } : {}),
   };
 }
 
@@ -3411,7 +3421,7 @@ function realCells(p, m) {
   else if (COL.mode === 'multi' && COL.gSteps > 0) {
     const n = Math.min(10, COL.gSteps | 0); let vid = 6000;
     for (let i = 0; i < use.length; i++) for (let j = i + 1; j < use.length; j++) for (let k = 1; k <= n; k++) {
-      const t = k / (n + 1); cand.push({ id: vid++, name: `${use[i].name} + ${use[j].name} ${Math.round(t * 100)}/${Math.round((1 - t) * 100)}`.replace(/ (\d+)\/(\d+)$/, (q, a2, b2) => ` ${b2}/${a2}`), color: lerpLin(use[i].color, use[j].color, t), mix: true });
+      const t = k / (n + 1); cand.push({ id: vid++, name: `${use[i].name} + ${use[j].name} ${Math.round(t * 100)}/${Math.round((1 - t) * 100)}`.replace(/ (\d+)\/(\d+)$/, (q, a2, b2) => ` ${b2}/${a2}`), color: lerpLin(use[i].color, use[j].color, t), mix: true, mixOf: [use[i].id, use[j].id], t });
     }
   }
   const lab = cand.map(c => ({ id: c.id, lab: rgb2lab(...hex2rgb(c.color)) }));
@@ -3421,7 +3431,7 @@ function realCells(p, m) {
   if (keep.size < cnt.size) C = quantizeReal(realCache.px, lab.filter(q => keep.has(q.id)), cw, ch);
   if (COL.cleanup > 0) { majority(C, cw, ch, Math.min(2, COL.cleanup)); removeSmall(C, cw, ch, Math.round((0.35 * COL.cleanup / Math.max(m.dx, m.dy)) ** 2)); }
   const used = new Set(C); let t0 = Math.max(0, ...pal.fils.map(f => f.tool));
-  state.virt = cand.filter(c => c.mix && used.has(c.id)).map(c => ({ id: c.id, name: c.name, color: c.color, tool: ++t0, mix: true }));
+  state.virt = cand.filter(c => c.mix && used.has(c.id)).map(c => ({ id: c.id, name: c.name, color: c.color, tool: ++t0, mix: true, mixOf: c.mixOf, t: c.t }));
   return C;
 }
 
@@ -3645,7 +3655,7 @@ function expandBands(bands, steps, T, fils, nextTool) {
     const fa = fil(B[k].fil), fb = fil(B[k + 1].fil), ca = hex2rgb(fa.color), cb = hex2rgb(fb.color);
     for (let i = 1; i <= steps; i++) {
       const t = i / (steps + 1);
-      const v = { id: vid++, name: `${fa.name} → ${fb.name} ${Math.round(t * 100)}%`, color: rgb2hex(ca.map((x, j) => x + (cb[j] - x) * t)), tool: nextTool++, mix: true };
+      const v = { id: vid++, name: `${fa.name} → ${fb.name} ${Math.round(t * 100)}%`, color: rgb2hex(ca.map((x, j) => x + (cb[j] - x) * t)), tool: nextTool++, mix: true, mixOf: [B[k].fil, B[k + 1].fil], t };
       virt.push(v); out.push({ fil: v.id, upTo: lo + (hi - lo) * i / steps });
     }
     prevHi = hi;
@@ -4244,25 +4254,98 @@ async function buildExport() {
   const bodies = buildBodies(p, m, tm, plan, A);
   const base = +PAL().asg.base;
   // buildings first: where they overlap the terrain, the slicer gives the first part priority
-  let parts = bodies.map(b => { const f = filById(b.fil) || { name: 'filament', tool: 1 }; return { name: f.name, tool: f.tool, recipe: f.recipe, body: b.body, isBase: b.fil === base, isBld: !!A.extra && b.fil === bld }; });
+  let parts = bodies.map(b => { const f = filById(b.fil) || { name: 'filament', tool: 1 }; return { name: f.name, tool: f.tool, recipe: f.recipe, color: f.color, mixOf: f.mixOf, t: f.t, body: b.body, isBase: b.fil === base, isBld: !!A.extra && b.fil === bld }; });
   if (COL.mode === 'fs') {   // one part per tool: pure pack filament or one mix
     const g = new Map(), pure = ['Cyan', 'Magenta', 'Yellow', { gray: 'Gray', black: 'Black' }[COL.fsEd] || 'White'];
     for (const x of parts) { if (!g.has(x.tool)) g.set(x.tool, { tool: x.tool, recipe: x.recipe, list: [], isBase: false, isBld: false }); const e = g.get(x.tool); e.list.push(x.body); e.isBase = e.isBase || x.isBase; e.isBld = e.isBld || x.isBld; }
-    parts = [...g.values()].map(e => ({ name: e.tool <= 4 ? pure[e.tool - 1] : 'Mix ' + e.recipe, tool: e.tool, body: mergeBodies(e.list), isBase: e.isBase, isBld: e.isBld }));
+    parts = [...g.values()].map(e => ({ name: e.tool <= 4 ? pure[e.tool - 1] : 'Mix ' + e.recipe, tool: e.tool, recipe: e.recipe, body: mergeBodies(e.list), isBase: e.isBase, isBld: e.isBld }));
   }
   parts.sort((a, b) => (b.isBld - a.isBld) || (b.isBase - a.isBase) || a.tool - b.tool);
   return { p, m, parts };
+}
+// ---------- slicer template: a project saved in the user's Orca (printer, process, filaments, mixed-color slots) ----------
+// The 3MF then carries those settings, the filament colors and the mix colors as real mixed filaments
+// (filament_is_mixed / filament_mixed_components / filament_mixed_sublayer_ratios), so nothing has to be set up.
+let TPL = null; try { TPL = JSON.parse(localStorage.getItem('landscapeMakerTemplate') || 'null'); } catch (e) {}
+const tplIsMix = v => v === '1' || v === 1 || v === true;
+function tplInfo() {
+  $('tplClear').classList.toggle('hide', !TPL);
+  if (!TPL) { $('tplInfo').textContent = 'No template: the 3MF has plain filament slots, mix colors as extra filaments.'; return; }
+  const c = TPL.cfg, mixed = c.filament_is_mixed.filter(tplIsMix).length;
+  $('tplInfo').textContent = `Template ${TPL.name}: ${c.printer_settings_id || '?'} · ${c.filament_colour.length - mixed} filaments + ${mixed} mix slots. The 3MF uses its printer, process and filament profiles.`;
+}
+async function loadTemplate(file) {
+  const z = unzipSync(new Uint8Array(await file.arrayBuffer())), dec = new TextDecoder();
+  const cf = Object.keys(z).find(k => /^metadata\/project_settings\.config$/i.test(k));
+  if (!cf) throw new Error('no project settings inside: save it as a project in Orca (File > Save project)');
+  const cfg = JSON.parse(dec.decode(z[cf]));
+  if (!Array.isArray(cfg.filament_colour)) throw new Error('no filaments in the project settings');
+  if (!Array.isArray(cfg.filament_is_mixed)) throw new Error('this slicer version has no mixed filaments (filament_is_mixed missing)');
+  const mf = Object.keys(z).find(k => /^3d\/3dmodel\.model$/i.test(k)), model = mf ? dec.decode(z[mf]) : '';
+  const meta = name => { const r = model.match(new RegExp(`<metadata name="${name}">([^<]*)</metadata>`)); return r ? r[1] : ''; };
+  TPL = { name: file.name, app: meta('Application') || 'BambuStudio-02.08.01.55', orca: meta('OrcaSlicer'), cfg };
+  try { localStorage.setItem('landscapeMakerTemplate', JSON.stringify(TPL)); } catch (e) { setStatus('Template loaded, but the browser could not store it: load it again after a reload.', true); }
+  tplInfo();
+}
+$('tplFile').addEventListener('change', async e => { const f = e.target.files[0]; if (!f) return; try { await loadTemplate(f); setStatus(`Template ${f.name} loaded.`); } catch (err) { console.error(err); setStatus('Template: ' + err.message, true); } e.target.value = ''; });
+$('tplClear').addEventListener('click', () => { TPL = null; try { localStorage.removeItem('landscapeMakerTemplate'); } catch (e) {} tplInfo(); });
+tplInfo();
+// own filaments -> the template's physical slots in tool order; mix colors -> its mixed slots (components + ratio),
+// biggest mixes first; mixes beyond the free slots (and custom-color placeholders) take the nearest slot color
+function applyTemplate(parts) {
+  const cfg = JSON.parse(JSON.stringify(TPL.cfg)), P = [], M = [], notes = [];
+  cfg.filament_colour.forEach((c, i) => (tplIsMix(cfg.filament_is_mixed[i]) ? M : P).push(i));
+  const set = (key, i, v) => { if (Array.isArray(cfg[key]) && i < cfg[key].length) cfg[key][i] = v; };
+  const fs = COL.mode === 'fs', pack = fs ? FS.ED[COL.fsEd].fils : null;
+  const physColor = k => fs ? pack[k - 1][1] : (PAL().fils.find(f => f.tool === k) || {}).color;
+  const maxTool = fs ? 4 : Math.max(0, ...PAL().fils.map(f => f.tool));
+  if (maxTool > P.length) throw new Error(`the template has ${P.length} filaments, ${maxTool} are needed: add filaments in Orca and save the template again`);
+  for (let k = 1; k <= maxTool; k++) { const c = physColor(k); if (c) { set('filament_colour', P[k - 1], c.toUpperCase()); set('filament_multi_colour', P[k - 1], c.toUpperCase()); } }
+  const toolOf = id => (PAL().fils.find(f => f.id === +id) || {}).tool;
+  const mixes = new Map(), extras = [];
+  for (const x of parts) {
+    let comps = null, ratios = null, color = x.color;
+    if (fs && x.tool > 4 && x.recipe) {
+      const tk = [...x.recipe.matchAll(/([CMYWGK])(\d+)/g)];
+      comps = tk.map(m => P['CMY'.indexOf(m[1]) < 0 ? 3 : 'CMY'.indexOf(m[1])]); ratios = tk.map(m => +m[2] / 100);
+      color = (FS.gamut(COL.fsEd).find(g => g.recipe === x.recipe) || {}).hex || '#888888';
+    } else if (!fs && x.mixOf) {
+      const ta = toolOf(x.mixOf[0]), tb = toolOf(x.mixOf[1]);
+      if (ta && tb) { comps = [P[ta - 1], P[tb - 1]]; ratios = [1 - x.t, x.t]; }
+    }
+    if (comps) { const key = comps.join(',') + ':' + ratios.map(r => r.toFixed(2)).join(','); if (!mixes.has(key)) mixes.set(key, { comps, ratios, color, w: 0, parts: [] }); const e = mixes.get(key); e.w += x.body.F.length; e.parts.push(x); }
+    else if (fs ? x.tool <= 4 : PAL().fils.some(f => f.tool === x.tool)) x.slot = P[x.tool - 1] + 1;
+    else extras.push(x);
+  }
+  const list = [...mixes.values()].sort((a, b) => b.w - a.w), slotLab = [];
+  for (let k = 1; k <= maxTool; k++) { const c = physColor(k); if (c) slotLab.push({ slot: P[k - 1] + 1, lab: rgb2lab(...hex2rgb(c)) }); }
+  list.forEach((mx, j) => {
+    if (j >= M.length) { extras.push(...mx.parts.map(x => Object.assign(x, { color: mx.color }))); return; }
+    const i = M[j];
+    set('filament_mixed_components', i, mx.comps.map(c => c + 1).join(','));
+    set('filament_mixed_sublayer_ratios', i, mx.ratios.map(r => r.toFixed(4)).join(','));
+    set('filament_mixed_gradient', i, '0'); set('filament_mixed_gradient_range', i, ''); set('filament_mixed_gradient_curve', i, '');
+    set('filament_colour', i, mx.color.toUpperCase()); set('filament_multi_colour', i, mx.color.toUpperCase());
+    for (const x of mx.parts) x.slot = i + 1;
+    slotLab.push({ slot: i + 1, lab: rgb2lab(...hex2rgb(mx.color)) });
+  });
+  if (list.length > M.length) notes.push(`The template has ${M.length} mix slots, ${list.length} mix colors are used: the ${list.length - M.length} smallest take the nearest color. Save a template with ${list.length} mix slots for all of them.`);
+  for (const x of extras) { const L0 = rgb2lab(...hex2rgb(x.color || '#888888')); let b = slotLab[0], bd = Infinity; for (const q of slotLab) { const d = (L0[0] - q.lab[0]) ** 2 + (L0[1] - q.lab[1]) ** 2 + (L0[2] - q.lab[2]) ** 2; if (d < bd) { bd = d; b = q; } } x.slot = b ? b.slot : 1; }
+  return { cfg, notes, phys: P.length, mixUsed: Math.min(list.length, M.length) };
 }
 $('dl3mf').addEventListener('click', async () => {
   try {
     const { p, parts } = await buildExport();
     busy(true, 'Writing 3MF…'); await nextFrame();
-    const files = build3MF(parts, p, $('line1').value || 'Landscape');
+    const tr = TPL ? applyTemplate(parts) : null;
+    const files = build3MF(parts, p, $('line1').value || 'Landscape', tr ? { ...TPL, out: tr.cfg } : null);
     busy(true, 'Compressing…'); await nextFrame();
     const zip = zipSync(files, { level: 6 });
     download(zip, slug() + '_landscape.3mf', 'model/3mf');
     const tris = parts.reduce((s, x) => s + x.body.F.length / 3, 0);
-    $('exportInfo').textContent = `3MF: ${parts.length} parts, ${(tris / 1e6).toFixed(2)} M triangles, ${(zip.length / 1e6).toFixed(1)} MB. Load these filaments: ` + parts.map(x => `T${x.tool} ${x.name}`).join(' · ');
+    $('exportInfo').textContent = tr
+      ? `3MF: ${parts.length} parts, ${(tris / 1e6).toFixed(2)} M triangles, ${(zip.length / 1e6).toFixed(1)} MB. Built on ${TPL.name}: filaments and ${tr.mixUsed} mix colors are set, nothing to set up in Orca. ` + tr.notes.join(' ')
+      : `3MF: ${parts.length} parts, ${(tris / 1e6).toFixed(2)} M triangles, ${(zip.length / 1e6).toFixed(1)} MB. Load these filaments: ` + parts.map(x => `T${x.tool} ${x.name}`).join(' · ');
   } catch (err) { console.error(err); setStatus('Export failed: ' + err.message, true); }
   finally { busy(false); }
 });
