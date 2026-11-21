@@ -92,7 +92,9 @@
   .xsw .knob::after { content:''; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:#8b919c; transition:left .15s, background .15s; }
   .xsw input:checked + .knob { background:#5c4a0c; } .xsw input:checked + .knob::after { left:18px; background:var(--acc); }
   #simple { border-top:1px solid var(--line); padding:8px 0; }
-  .sfil { display:grid; grid-template-columns:34px 1fr 40px; gap:8px; align-items:center; margin:5px 0; }
+  .sfil { display:grid; grid-template-columns:18px 34px 1fr 40px; gap:8px; align-items:center; margin:5px 0; }
+  .sfil.off input[type=color], .sfil.off input[type=text] { opacity:.35; }
+  .sfil input[type=checkbox] { margin:0; width:16px; height:16px; }
   .sfil input[type=color] { width:34px; height:28px; border:1px solid var(--line); border-radius:6px; background:none; padding:0; }
   .sfil .t { color:var(--mute); font-size:12px; text-align:right; }
   .rec { display:grid; grid-template-columns:34px 1fr auto; gap:8px; align-items:center; margin:5px 0; font-size:13px; }
@@ -141,7 +143,7 @@
     <label class="check"><input type="checkbox" id="sNoMix"> Only my filaments (no mix colors to set up in the slicer)</label>
     <div id="sRec" class="hide">
       <h3>Recommended for this area</h3>
-      <div class="hint">The 4 filament colors that match the satellite photo best (shadows taken out). Buy or load these for the most natural look.</div>
+      <div class="hint">The filament colors that match the satellite photo best (shadows taken out), one per filament that is on. Buy or load these for the most natural look.</div>
       <div id="sRecList"></div>
       <button type="button" id="sRecUse" class="sec">Use these filaments</button>
     </div>
@@ -1959,7 +1961,12 @@ function renderSimpleFils() {
     col.addEventListener('input', setCol); col.addEventListener('change', setCol);
     nm.addEventListener('input', () => { COL.simple.fils[i][0] = nm.value; saveCOL(); });
     nm.addEventListener('change', () => { queueSuggestions(true); refreshPick(); });
-    box.append(mk('div', { className: 'sfil' }, col, nm, mk('span', { className: 't', textContent: 'T' + (i + 1) })));
+    const on = mk('input', { type: 'checkbox', checked: S.fs || !f[2], disabled: S.fs, title: 'Use this filament' });
+    on.addEventListener('change', () => {
+      if (!on.checked && COL.simple.fils.filter(x => !x[2]).length <= 2) { on.checked = true; setStatus('At least 2 filaments must stay on.', true); return; }
+      COL.simple.fils[i][2] = !on.checked; saveCOL(); renderSimpleFils(); queueSuggestions(true); refreshPick();
+    });
+    box.append(mk('div', { className: 'sfil' + (!S.fs && f[2] ? ' off' : '') }, on, col, nm, mk('span', { className: 't', textContent: 'T' + (i + 1) })));
   });
   $('sFS').checked = S.fs; $('sEd').value = S.ed; $('sEdRow').classList.toggle('hide', !S.fs);
   $('sNoMix').checked = !!S.noMix; $('sNoMix').parentElement.classList.toggle('hide', S.fs);
@@ -1974,7 +1981,7 @@ let pickTimer; function refreshPick() { clearTimeout(pickTimer); pickTimer = set
 // the 4 suggestions: each one is a full color setup (mode, palette, assignments) applied to COL
 function suggestionList() {
   const S = COL.simple, src = S.fs ? S_FS[S.ed] : S.fils, m = state.lastModel, lo = m ? m.hmin : 350, hi = m ? m.hmax : 1450;
-  const F = src.map((f, i) => ({ id: i + 1, name: f[0], color: f[1], tool: i + 1, real: true }));
+  const F = src.map((f, i) => ({ id: i + 1, name: f[0], color: f[1], tool: i + 1, real: true, off: !S.fs && f[2] })).filter(f => !f.off);   // switched-off filaments: not used, tool numbers stay
   const rgb = f => hex2rgb(f.color), lum = f => { const [r, g, b] = rgb(f); return 0.299 * r + 0.587 * g + 0.114 * b; };
   const satu = f => { const c = rgb(f); return Math.max(...c) - Math.min(...c); }, blue = f => { const [r, g, b] = rgb(f); return b - Math.max(r, g) + (g > r ? (g - r) / 3 : 0); };
   const byLum = F.slice().sort((a, b) => lum(a) - lum(b)), dark = byLum[0], light = byLum[F.length - 1];
@@ -2094,12 +2101,13 @@ function recommendFilaments(px, k, withMix = false) {
   const mix = {};   // labs of the 1/3 and 2/3 mixes of every catalog pair
   if (withMix) for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) mix[i * N + j] = [1 / 3, 2 / 3].map(t => rgb2lab(...hex2rgb(lerpLin(cat[i].hex, cat[j].hex, t))));
   let best = null, bestErr = Infinity;
-  const idx = [0, 1, 2, 3];
-  for (idx[0] = 0; idx[0] < N; idx[0]++) for (idx[1] = idx[0] + 1; idx[1] < N; idx[1]++) for (idx[2] = idx[1] + 1; idx[2] < N; idx[2]++) for (idx[3] = idx[2] + 1; idx[3] < N; idx[3]++) {
+  const sets = [], rec = (start, cur) => { if (cur.length === k) { sets.push(cur.slice()); return; } for (let i = start; i < N; i++) { cur.push(i); rec(i + 1, cur); cur.pop(); } };
+  rec(0, []);
+  for (const idx of sets) {
     const labs = idx.map(i => cat[i].lab);
     if (withMix) for (let a = 0; a < k; a++) for (let b = a + 1; b < k; b++) labs.push(...mix[idx[a] * N + idx[b]]);
     let err = 0; for (const q of P) { let m = Infinity; for (const l of labs) { const d = d2(q.lab, l); if (d < m) m = d; } err += q.w * m; if (err >= bestErr) break; }
-    if (err < bestErr) { bestErr = err; best = idx.slice(); }
+    if (err < bestErr) { bestErr = err; best = idx; }
   }
   const pick = best.map(i => ({ name: cat[i].name, hex: cat[i].hex, share: 0, lum: cat[i].lab[0] }));
   for (const q of P) { let bi = 0, bd = Infinity; best.forEach((ci, j) => { const d = d2(q.lab, cat[ci].lab); if (d < bd) { bd = d; bi = j; } }); pick[bi].share += q.w; }
@@ -2111,9 +2119,9 @@ async function updateRecommendation(p, m) {
   if (EXPERT) return;
   try {
     await ensureImagery();
-    const key = [state.img.key, p.lat, p.lon, p.areaKm, COL.shade, COL.blur, COL.autoLevels, COL.simple.noMix].join('|');
+    const key = [state.img.key, p.lat, p.lon, p.areaKm, COL.shade, COL.blur, COL.autoLevels, COL.simple.noMix, COL.simple.fils.map(f => f[2] ? 0 : 1).join('')].join('|');
     if (key === recKey) return; recKey = key;
-    const { pick } = recommendFilaments(realPixels(p, m), 4, !COL.simple.noMix);
+    const { pick } = recommendFilaments(realPixels(p, m), Math.max(2, COL.simple.fils.filter(f => !f[2]).length), !COL.simple.noMix);
     recPick = pick.filter(Boolean);
     const box = $('sRecList'); box.innerHTML = '';
     for (const r of recPick) box.append(mk('div', { className: 'rec' }, mk('i', { style: 'background:' + r.hex }), mk('span', { textContent: r.name }), mk('small', { textContent: Math.round(r.share * 100) + ' %' })));
@@ -2122,7 +2130,7 @@ async function updateRecommendation(p, m) {
 }
 $('sRecUse').addEventListener('click', () => {
   if (!recPick) return;
-  COL.simple.fils = recPick.map(r => [r.name, r.hex]); COL.simple.fs = false; saveCOL();
+  let j = 0; COL.simple.fils = COL.simple.fils.map(f => f[2] ? f : (recPick[j] ? [recPick[j].name, recPick[j++].hex] : f)); COL.simple.fs = false; saveCOL();   // fill the filaments that are on
   renderSimpleFils(); queueSuggestions(true); applySuggestion(suggestionList().findIndex(o => o.title === 'Satellite colors'));
 });
 function applySuggestion(k) {
