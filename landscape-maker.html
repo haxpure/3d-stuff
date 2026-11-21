@@ -3408,6 +3408,9 @@ const lerpLin = (h1, h2, t) => { const a = hex2rgb(h1), b = hex2rgb(h2), L = v =
 // photo -> per-cell RGB: shadows out, smoothed, then levels / saturation / hue / contrast
 const realPixels = (p, m) => adjustColors(deshadeCells(imageryCells(p, m, state.img.sample), m, m.nx - 1, m.ny - 1, (COL.shade ?? 100) / 100, COL.blur ?? 1),
   COL.autoLevels, COL.sat, COL.simple.hue, COL.simple.contrast);
+// slicer slots: 4 main filaments + mixes, never more than this in total
+const MAX_SLOTS = 12;
+const extraSlots = () => (COL.labelFil === 'custom' && COL.mode !== 'four' ? 1 : 0) + (COL.cpoiFil === 'custom' && COL.mode !== 'four' && $('poiCenter').checked ? 1 : 0);
 function realCells(p, m) {
   const pal = PAL(), base = pal.fils.filter(f => f.real);
   // the blue filament that prints the water is not used for land: blue in the photo is haze or shade, not terrain
@@ -3417,7 +3420,7 @@ function realCells(p, m) {
   const key = [state.img.key, m.nx, m.ny, COL.autoLevels, COL.sat, COL.simple.hue, COL.simple.contrast, COL.shade, COL.blur].join('|');
   if (!realCache || realCache.key !== key) realCache = { key, px: realPixels(p, m) };
   let cand = use.map(f => ({ id: f.id, color: f.color }));
-  if (COL.mode === 'fs') cand = FS.gamut(COL.fsEd).map((g, i) => ({ id: 7000 + i, name: 'Mix ' + g.recipe, color: g.hex, mix: true }));
+  if (COL.mode === 'fs') cand = FS.gamut(COL.fsEd).map((g, i) => ({ id: 7000 + i, name: 'Mix ' + g.recipe, color: g.hex, mix: true, base: g.single >= 0 }));
   else if (COL.mode === 'multi' && COL.gSteps > 0) {
     const n = Math.min(10, COL.gSteps | 0); let vid = 6000;
     for (let i = 0; i < use.length; i++) for (let j = i + 1; j < use.length; j++) for (let k = 1; k <= n; k++) {
@@ -3427,11 +3430,13 @@ function realCells(p, m) {
   const lab = cand.map(c => ({ id: c.id, lab: rgb2lab(...hex2rgb(c.color)) }));
   let C = quantizeReal(realCache.px, lab, cw, ch);
   const cnt = new Map(); for (const v of C) cnt.set(v, (cnt.get(v) || 0) + 1);
-  // your own filaments always stay (they are loaded anyway); the limit only picks the most used mixes.
-  // With a slicer template the number of mixes is its number of mix slots (e.g. 4 filaments + 8 mixes).
-  const mixCap = COL.mode === 'multi' && TPL ? TPL.cfg.filament_is_mixed.filter(tplIsMix).length : Math.max(0, (COL.maxCols | 0) - (COL.mode === 'fs' ? 0 : use.length));
-  const baseIds = COL.mode === 'fs' ? [] : use.map(f => f.id);
-  const keep = new Set([...baseIds, ...[...cnt].filter(e => !baseIds.includes(e[0])).sort((a, b) => b[1] - a[1]).slice(0, COL.mode === 'fs' ? Math.max(2, COL.maxCols | 0) : mixCap).map(e => e[0])]);
+  // the main filaments always stay (they are loaded anyway, used pure or inside mixes); the limit only picks the
+  // most used mixes: main + mixes + custom-color slots never exceed MAX_SLOTS, and with a slicer template the
+  // mixes also fit its mix slots
+  const baseIds = cand.filter(c => COL.mode === 'fs' ? c.base : !c.mix).map(c => c.id);
+  let mixCap = Math.min(MAX_SLOTS - baseIds.length - extraSlots(), Math.max(0, (COL.maxCols | 0) - baseIds.length));
+  if (TPL) mixCap = Math.min(mixCap, TPL.cfg.filament_is_mixed.filter(tplIsMix).length);
+  const keep = new Set([...baseIds, ...[...cnt].filter(e => !baseIds.includes(e[0])).sort((a, b) => b[1] - a[1]).slice(0, Math.max(0, mixCap)).map(e => e[0])]);
   if (keep.size < cnt.size) C = quantizeReal(realCache.px, lab.filter(q => keep.has(q.id)), cw, ch);
   if (COL.cleanup > 0) { majority(C, cw, ch, Math.min(2, COL.cleanup)); removeSmall(C, cw, ch, Math.round((0.35 * COL.cleanup / Math.max(m.dx, m.dy)) ** 2)); }
   const used = new Set(C); let t0 = Math.max(0, ...pal.fils.map(f => f.tool));
@@ -3631,7 +3636,8 @@ function colorCfg(p, m) {
     rockFil: im === 'bands' ? +A.rock : -1, slopeDeg: Cu.slopeDeg, skin: Math.max(0.2, COL.skin), realContours: COL.realContours };
   state.virt = [];
   if (im === 'bands' && COL.mode !== 'four' && COL.gSteps > 0 && COL.blendM > 0) {
-    const ex = expandBands(cfg.bands, Math.min(10, COL.gSteps | 0), +COL.blendM, Cu.fils, Math.max(0, ...Cu.fils.map(f => f.tool)) + 1);
+    const sb = cfg.bands.slice().sort((a, b) => a.upTo - b.upTo), edges = Math.max(1, sb.filter((b, k) => k > 0 && b.fil !== sb[k - 1].fil).length), free = MAX_SLOTS - Cu.fils.length - extraSlots();
+    const ex = expandBands(cfg.bands, Math.max(0, Math.min(10, COL.gSteps | 0, Math.floor(free / edges))), +COL.blendM, Cu.fils, Math.max(0, ...Cu.fils.map(f => f.tool)) + 1);
     cfg.bands = ex.bands; state.virt = ex.virt;
   }
   if (cfg.mode === 'real') { if (state.img) cfg.cellColors = realCells(p, m); else { cfg.mode = 'contour'; cfg.terrainFil = +A.core; } }
