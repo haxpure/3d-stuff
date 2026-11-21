@@ -221,8 +221,8 @@
       <label class="check"><input type="checkbox" id="autoLevels" checked> Auto-levels (stretch dark imagery)</label>
       <div class="row"><label>Saturation</label><div class="rng"><input type="range" id="sat" min="0.5" max="2.5" step="0.05" value="1.3"><output></output></div></div>
       <div class="row"><label>Remove shadows<small>takes the sun's shading out of the photo</small></label><div class="rng"><input type="range" id="shade" min="0" max="100" step="5" value="100"><output></output></div></div>
-      <div class="row"><label>Smoothing<small>blurs fields, roofs and roads before matching</small></label><div class="rng"><input type="range" id="blur" min="0" max="5" step="1" value="2"><output></output></div></div>
-      <div class="row"><label>Cleanup<small>merges small patches (0.35 mm per step)</small></label><div class="rng"><input type="range" id="cleanup" min="0" max="5" step="1" value="2"><output></output></div></div>
+      <div class="row"><label>Smoothing<small>blurs fields, roofs and roads before matching</small></label><div class="rng"><input type="range" id="blur" min="0" max="5" step="1" value="1"><output></output></div></div>
+      <div class="row"><label>Cleanup<small>merges small patches (0.35 mm per step)</small></label><div class="rng"><input type="range" id="cleanup" min="0" max="5" step="1" value="1"><output></output></div></div>
       <div class="row" id="rowMaxCols"><label>Max. colors<small>the most used colors / mixes are kept</small></label><input type="number" id="maxCols" value="12" min="2" max="40" step="1"></div>
       <div class="row"><label>Filaments from imagery<small>replaces the "R" filaments</small></label><div style="display:grid;grid-template-columns:52px 1fr;gap:6px"><input type="number" id="kN" value="6" min="2" max="12"><button type="button" id="kBtn" class="sec" style="padding:6px">Create</button></div></div>
     </div>
@@ -863,7 +863,8 @@ function deshadeCells(px, m, cw, ch, strength, blur) {
       for (let ch3 = 0; ch3 < 3; ch3++) X[ch3][i] -= strength * (M[1][4 + ch3] * NX[i] + M[2][4 + ch3] * NY[i]);
       Lc[i] = Math.max(0, Math.min(100, Lc[i]));
     }
-    // cast shadows: the darkest 10 % take color (and most of their lightness) from lit cells nearby
+    // cast shadows: the darkest 10 % take color (and most of their lightness) from lit cells nearby - but only inside
+    // large dark areas: the small dark gaps between tree crowns are detail, not shadow, and stay as they are
     const hist = new Uint32Array(101); let cnt = 0;
     for (let i = 0; i < n; i++) if (L0[i] >= 2) { hist[Math.min(100, Math.round(L0[i]))]++; cnt++; }
     let thr = 0; for (let s = 0; thr < 100 && (s += hist[thr]) < cnt * 0.1; ) thr++;
@@ -871,15 +872,16 @@ function deshadeCells(px, m, cw, ch, strength, blur) {
       const W = new Float32Array(n), WL = new Float32Array(n), WA = new Float32Array(n), WB = new Float32Array(n);
       for (let i = 0; i < n; i++) if (L0[i] >= thr) { W[i] = 1; WL[i] = Lc[i]; WA[i] = A[i]; WB[i] = B[i]; }
       const R = Math.max(3, Math.round(1.5 / Math.max(m.dx, m.dy)));   // about 1.5 mm on the print
+      const LM = Float32Array.from(L0); boxBlur(LM, cw, ch, R);         // local mean lightness
       for (const Y of [W, WL, WA, WB]) { boxBlur(Y, cw, ch, R); boxBlur(Y, cw, ch, R); }
       for (let i = 0; i < n; i++) {
-        if (L0[i] >= thr || L0[i] < 2 || W[i] < 0.05) continue;
+        if (L0[i] >= thr || L0[i] < 2 || W[i] < 0.05 || LM[i] > thr * 1.25) continue;
         const t = Math.min(1, (thr - L0[i]) / Math.max(1, thr * 0.5)) * strength;   // deeper shadow, more replaced
         Lc[i] += (WL[i] / W[i] - Lc[i]) * t * 0.7; A[i] += (WA[i] / W[i] - A[i]) * t; B[i] += (WB[i] / W[i] - B[i]) * t;
       }
     }
   }
-  if (blur > 0) for (const X of [Lc, A, B]) { boxBlur(X, cw, ch, blur); boxBlur(X, cw, ch, blur); }
+  if (blur > 0) for (const X of [Lc, A, B]) boxBlur(X, cw, ch, blur);   // one pass: keeps tree crowns and clearings
   const out = new Uint8Array(n * 3);
   for (let i = 0; i < n; i++) { const q = lab2rgb(Lc[i], A[i], B[i]); for (let j = 0; j < 3; j++) out[i * 3 + j] = Math.max(0, Math.min(255, Math.round(q[j]))); }
   return out;
@@ -1101,7 +1103,7 @@ let COL = null;
 try { COL = JSON.parse(localStorage.getItem('landscapeMakerColors3') || 'null'); } catch (e) {}
 if (!COL || !COL.custom || !COL.real || COL.custom.fils.length !== 4 || !['four', 'multi', 'fs'].includes(COL.mode))
   COL = { mode: 'multi', style4: 'bands', styleN: 'real', custom: presetPal('alpine4', 350, 1450), real: presetPal('satellite', 350, 1450), skin: 0.6, imgSrc: 'esri', autoLevels: true, sat: 1.3, cleanup: 2, realContours: false, kN: 6, blendM: 80, gSteps: 3 };
-COL.blendM ??= 80; COL.gSteps ??= 3; COL.maxCols ??= 12; COL.shade ??= 100; COL.blur ??= 2; COL.fsEd ??= 'white'; if (!COL.fs) COL.fs = presetPal('grad8', 350, 1450);
+COL.blendM ??= 80; COL.gSteps ??= 3; COL.maxCols ??= 12; COL.shade ??= 100; COL.blur ??= 1; if (!COL.detailV) { COL.blur = Math.min(COL.blur, 1); COL.cleanup = Math.min(COL.cleanup ?? 1, 1); COL.detailV = 1; }   // finer defaults since v2 COL.fsEd ??= 'white'; if (!COL.fs) COL.fs = presetPal('grad8', 350, 1450);
 const PAL = () => COL.mode === 'fs' ? COL.fs : COL.mode === 'multi' ? COL.real : COL.custom;
 // internal coloring mode: 'contour' | 'bands' | 'real'
 const imode = () => COL.mode === 'four' ? COL.style4 : (COL.styleN === 'real' ? 'real' : 'bands');
@@ -1621,7 +1623,7 @@ const lerpLin = (h1, h2, t) => { const a = hex2rgb(h1), b = hex2rgb(h2), L = v =
 // satellite colors: candidates = your "R" colors + their mixes (More colors) or every mix of the pack (Full Spectrum);
 // the most used ones (max. colors) are kept, every mix becomes a placeholder filament
 // photo -> per-cell RGB: shadows out, smoothed, then levels / saturation / hue / contrast
-const realPixels = (p, m) => adjustColors(deshadeCells(imageryCells(p, m, state.img.sample), m, m.nx - 1, m.ny - 1, (COL.shade ?? 100) / 100, COL.blur ?? 2),
+const realPixels = (p, m) => adjustColors(deshadeCells(imageryCells(p, m, state.img.sample), m, m.nx - 1, m.ny - 1, (COL.shade ?? 100) / 100, COL.blur ?? 1),
   COL.autoLevels, COL.sat, COL.simple.hue, COL.simple.contrast);
 function realCells(p, m) {
   const pal = PAL(), base = pal.fils.filter(f => f.real);
