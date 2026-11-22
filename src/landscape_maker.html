@@ -1111,7 +1111,8 @@ try { COL = JSON.parse(localStorage.getItem('landscapeMakerColors3') || 'null');
 if (!COL || !COL.custom || !COL.real || COL.custom.fils.length !== 4 || !['four', 'multi', 'fs'].includes(COL.mode))
   COL = { mode: 'multi', style4: 'bands', styleN: 'real', custom: presetPal('alpine4', 350, 1450), real: presetPal('satellite', 350, 1450), skin: 0.6, imgSrc: 'esri', autoLevels: false, sat: 1.3, cleanup: 2, realContours: false, kN: 6, blendM: 80, gSteps: 3 };
 COL.blendM ??= 80; COL.gSteps ??= 3; COL.maxCols ??= 12; COL.shade ??= 100; COL.blur ??= 1; if (!COL.detailV) { COL.blur = Math.min(COL.blur, 1); COL.cleanup = Math.min(COL.cleanup ?? 1, 1); COL.detailV = 1; }   // finer defaults since v2
-if (COL.detailV < 2) { COL.autoLevels = false; COL.detailV = 2; }   // auto-levels brightened prints well past the photo: off by default COL.fsEd ??= 'white'; if (!COL.fs) COL.fs = presetPal('grad8', 350, 1450);
+if (COL.detailV < 2) { COL.autoLevels = false; COL.detailV = 2; }   // auto-levels brightened prints well past the photo: off by default
+COL.fsEd ??= 'white'; if (!COL.fs) COL.fs = presetPal('grad8', 350, 1450);
 const PAL = () => COL.mode === 'fs' ? COL.fs : COL.mode === 'multi' ? COL.real : COL.custom;
 // internal coloring mode: 'contour' | 'bands' | 'real'
 const imode = () => COL.mode === 'four' ? COL.style4 : (COL.styleN === 'real' ? 'real' : 'bands');
