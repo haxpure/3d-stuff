@@ -151,7 +151,7 @@
     <div id="sTune">
       <div class="row"><label>Hue</label><div class="rng"><input type="range" id="sHue" min="-180" max="180" step="5" value="0"><output></output></div></div>
       <div class="row"><label>Contrast</label><div class="rng"><input type="range" id="sCon" min="50" max="200" step="5" value="100"><output></output></div></div>
-      <div class="row"><label>Greens<small>satellite colors: forest and meadows greener</small></label><div class="rng"><input type="range" id="sGreen" min="100" max="300" step="10" value="200"><output></output></div></div>
+      <div class="row"><label>Greens<small>satellite colors: forest and meadows greener</small></label><div class="rng"><input type="range" id="sGreen" min="100" max="300" step="10" value="220"><output></output></div></div>
       <div class="row"><label>Brightness<small>satellite colors: lifts dark areas</small></label><div class="rng"><input type="range" id="sBright" min="0" max="40" step="5" value="15"><output></output></div></div>
       <div class="hint" id="sTuneHint">Hue shifts satellite colors and Full Spectrum mixes. Contrast also moves the band borders: more area for the darkest and lightest color.</div>
     </div>
@@ -1634,7 +1634,7 @@ const lerpLin = (h1, h2, t) => { const a = hex2rgb(h1), b = hex2rgb(h2), L = v =
 // the most used ones (max. colors) are kept, every mix becomes a placeholder filament
 // photo -> per-cell RGB: shadows out, smoothed, then levels / saturation / hue / contrast
 const realPixels = (p, m) => greenLift(adjustColors(deshadeCells(imageryCells(p, m, state.img.sample), m, m.nx - 1, m.ny - 1, (COL.shade ?? 100) / 100, COL.blur ?? 1),
-  COL.autoLevels, COL.sat, COL.simple.hue, COL.simple.contrast), (COL.simple.green ?? 200) / 100, (COL.simple.bright ?? 15) / 100);
+  COL.autoLevels, COL.sat, COL.simple.hue, COL.simple.contrast), (COL.simple.green ?? 220) / 100, (COL.simple.bright ?? 15) / 100);
 // Satellite photos of forest are close to gray: printed as is, tree tops come out black or charcoal. Boost the chroma
 // of yellow-green to green hues (full at 125 deg, fading out 55 deg either side) and lift dark tones (gamma on L*).
 function greenLift(px, g, bright) {
@@ -1955,7 +1955,7 @@ const asgIds = () => { const A = PAL().asg; return { bld: +A.bld, base: +A.base,
 
 // ===== simple mode: your filaments in, 4 ready-made looks out =====
 COL.simple ??= { fils: [['Yellow', '#f6c21c'], ['Gray', '#a3a6aa'], ['Light blue', '#5fc3d6'], ['Black', '#17181b']], fs: false, ed: 'white', pick: 3 };
-COL.simple.noMix ??= false; COL.simple.green ??= 200; COL.simple.bright ??= 15;
+COL.simple.noMix ??= false; COL.simple.green ??= 220; COL.simple.bright ??= 15;
 COL.simple.hue ??= 0; COL.simple.contrast ??= 100;
 const S_FS = { white: [['Cyan', '#00C3FF'], ['Magenta', '#F54399'], ['Yellow', '#FAE727'], ['White', '#F2F2EF']], gray: [['Cyan', '#08ABFB'], ['Magenta', '#D93B90'], ['Yellow', '#F9ED3D'], ['Gray', '#A9A6A1']], black: [['Cyan', '#00C3FF'], ['Magenta', '#F54399'], ['Yellow', '#FAE727'], ['Black', '#1B1C1E']] };
 let EXPERT = false; try { EXPERT = localStorage.getItem('landscapeMakerExpert') === '1'; } catch (e) {}
