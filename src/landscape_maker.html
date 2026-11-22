@@ -97,7 +97,6 @@
   .sfil input[type=checkbox] { margin:0; width:16px; height:16px; }
   .sfil input[type=color] { width:34px; height:28px; border:1px solid var(--line); border-radius:6px; background:none; padding:0; }
   .sfil .t { color:var(--mute); font-size:12px; text-align:right; }
-  .sfil .t.lock { color:var(--acc); font-weight:600; cursor:pointer; }
   .rec { display:grid; grid-template-columns:34px 1fr auto; gap:8px; align-items:center; margin:5px 0; font-size:13px; }
   .rec i { display:block; width:34px; height:24px; border:1px solid var(--line); border-radius:6px; }
   .rec small { color:var(--mute); font-size:11px; }
@@ -144,7 +143,7 @@
     <label class="check"><input type="checkbox" id="sNoMix"> Only my filaments (no mix colors to set up in the slicer)</label>
     <div id="sRec" class="hide">
       <h3>Recommended for this area</h3>
-      <div class="hint">The filament colors that match the satellite photo best (shadows taken out), one per filament that is on. After using them, a color you change yourself stays (yellow T number) and the other filaments are picked again around it.</div>
+      <div class="hint">The filament colors that match the satellite photo best (shadows taken out), one per filament that is on. Buy or load these for the most natural look.</div>
       <div id="sRecList"></div>
       <button type="button" id="sRecUse" class="sec">Use these filaments</button>
     </div>
@@ -1977,7 +1976,7 @@ function renderSimpleFils() {
   list.forEach((f, i) => {
     const col = mk('input', { type: 'color', value: f[1], disabled: S.fs }), nm = mk('input', { type: 'text', value: f[0], disabled: S.fs, placeholder: 'Filament name' });
     // a color you set yourself stays fixed: the recommendation re-picks the others around it
-    const setCol = () => { if (COL.simple.fs) return; COL.simple.fils[i][1] = col.value; COL.simple.fils[i][3] = true; if (FIL_CATALOG.some(c => c[0] === nm.value)) COL.simple.fils[i][0] = nm.value = 'Own color'; tl.classList.add('lock'); saveCOL(); queueSuggestions(true); refreshPick(); };
+    const setCol = () => { if (COL.simple.fs) return; COL.simple.fils[i][1] = col.value; if (FIL_CATALOG.some(c => c[0] === nm.value)) COL.simple.fils[i][0] = nm.value = 'Own color'; saveCOL(); queueSuggestions(true); refreshPick(); };
     col.addEventListener('input', setCol); col.addEventListener('change', setCol);
     nm.addEventListener('input', () => { COL.simple.fils[i][0] = nm.value; saveCOL(); });
     nm.addEventListener('change', () => { queueSuggestions(true); refreshPick(); });
@@ -1986,8 +1985,7 @@ function renderSimpleFils() {
       if (!on.checked && COL.simple.fils.filter(x => !x[2]).length <= 2) { on.checked = true; setStatus('At least 2 filaments must stay on.', true); return; }
       COL.simple.fils[i][2] = !on.checked; saveCOL(); renderSimpleFils(); queueSuggestions(true); refreshPick();
     });
-    const tl = mk('span', { className: 't' + (!S.fs && f[3] ? ' lock' : ''), textContent: 'T' + (i + 1), title: 'Yellow = fixed by you: the recommendation keeps this color. Click to release.' });
-    tl.addEventListener('click', () => { if (S.fs || !COL.simple.fils[i][3]) return; COL.simple.fils[i][3] = false; saveCOL(); renderSimpleFils(); queueSuggestions(true); });
+    const tl = mk('span', { className: 't', textContent: 'T' + (i + 1) });
     box.append(mk('div', { className: 'sfil' + (!S.fs && f[2] ? ' off' : '') }, on, col, nm, tl));
   });
   $('sFS').checked = S.fs; $('sEd').value = S.ed; $('sEdRow').classList.toggle('hide', !S.fs);
@@ -2146,35 +2144,22 @@ async function updateRecommendation(p, m) {
   if (EXPERT) return;
   try {
     await ensureImagery();
-    const act = COL.simple.fils.filter(f => !f[2]), fixedF = act.filter(f => f[3]), k = Math.max(2, act.length);
+    const act = COL.simple.fils.filter(f => !f[2]), k = Math.max(2, act.length);
     const base = [state.img.key, p.lat, p.lon, p.areaKm, COL.shade, COL.blur, COL.autoLevels, COL.simple.green, COL.simple.bright, COL.simple.noMix, COL.simple.fils.map(f => f[2] ? 0 : 1).join('')].join('|');
-    let px = null;
     if (base !== recKey) {   // the recommendation is always the best set for the photo, your own colors don't change it
-      recKey = base; px = realPixels(p, m);
+      recKey = base; const px = realPixels(p, m);
       recPick = recommendFilaments(px, k, !COL.simple.noMix).pick;
       const box = $('sRecList'); box.innerHTML = '';
       for (const r of recPick) box.append(mk('div', { className: 'rec' }, mk('i', { style: 'background:' + r.hex }), mk('span', { textContent: r.name }), mk('small', { textContent: Math.round(r.share * 100) + ' %' })));
       $('sRec').classList.remove('hide');
     }
-    // after "Use these filaments": the filaments you did not set yourself are picked again around your own colors
-    const fitKey = base + '|' + fixedF.map(f => f[1]).join(',');
-    if (!COL.simple.autoRec || fitKey === fitRecKey) return; fitRecKey = fitKey;
-    const free = fixedF.length ? recommendFilaments(px || realPixels(p, m), k, !COL.simple.noMix, fixedF.map(f => f[1])).pick.filter(r => !r.fixed) : recPick;
-    fillFree(free);
-  } catch (e) { recKey = fitRecKey = ''; console.warn('recommendation', e); }
+  } catch (e) { recKey = ''; console.warn('recommendation', e); }
 }
-let fitRecKey = '';
-function fillFree(free) {
-  let j = 0, changed = false;
-  COL.simple.fils = COL.simple.fils.map(f => { if (f[2] || f[3] || !free[j]) return f; const r = free[j++]; if (r.hex !== f[1]) changed = true; return [r.name, r.hex, false, false]; });
-  COL.simple.fs = false; saveCOL();
-  if (changed) { renderSimpleFils(); queueSuggestions(true); applySuggestion(suggestionList().findIndex(o => o.title === 'Satellite colors')); }
-}
-// fill every filament that is on with the recommendation; from now on the others follow it when you set one yourself
+// fill every filament that is on with the recommendation (only when you click it, your own colors are never changed)
 function useRecommendation() {
   if (!recPick) return;
   let j = 0; COL.simple.fils = COL.simple.fils.map(f => f[2] || !recPick[j] ? f : [recPick[j].name, recPick[j++].hex, false, false]);
-  COL.simple.fs = false; COL.simple.autoRec = true; fitRecKey = ''; saveCOL();
+  COL.simple.fs = false; saveCOL();
   renderSimpleFils(); queueSuggestions(true); applySuggestion(suggestionList().findIndex(o => o.title === 'Satellite colors'));
 }
 $('sRecUse').addEventListener('click', useRecommendation);
