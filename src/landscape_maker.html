@@ -1642,18 +1642,27 @@ const extraSlots = () => (COL.labelFil === 'custom' && COL.mode !== 'four' ? 1 :
 // "Recalculate colors": which mixes of the loaded filaments reproduce the satellite photo best? Candidates are all
 // pairs in 10 % steps (20-80 %); starting from the pure filaments, the mix that lowers the photo error most is added,
 // until the slicer slots are full. Stored with the filament colors, so it only applies to exactly these filaments.
-// natural look: forest and meadows in the photo are close to gray, so gray mixes would win. Push yellow-green and
-// near-gray land (not bright rock, not water blue) towards green, so it gets the gray-green and dark green mixes.
-let VEG = 16;
+// Natural look: in a satellite photo, forest is dark and nearly gray, so it would print black or gray. Trees are
+// recognized as dark land (not water blue, not bright rock/roads): they get a clear dark-green tint, and deep shade
+// inside the forest is lifted a little, so it prints dark green instead of black. Meadows get a softer green push.
+let VEG = 16, TREE = 1;
 function vegTint(px) {
   const out = new Uint8Array(px.length), cache = new Map();
   for (let i = 0; i < px.length; i += 3) {
     const key = (px[i] >> 2) << 12 | (px[i + 1] >> 2) << 6 | (px[i + 2] >> 2); let c = cache.get(key);
     if (!c) {
       const q = rgb2lab(px[i], px[i + 1], px[i + 2]), C = Math.hypot(q[1], q[2]), hue = Math.atan2(q[2], q[1]) * 180 / Math.PI;
-      const veg = C < 5 || (hue > 40 && hue < 175) ? 1 : 0, lw = Math.max(0, Math.min(1, (q[0] - 5) / 8, (75 - q[0]) / 15));
-      const add = VEG * veg * lw * Math.max(0.3, 1 - C / 25), f = veg ? 1 + VEG / 25 : 1;
-      c = lab2rgb(q[0], q[1] * f - add * 0.574, q[2] * f + add * 0.819).map(v => Math.max(0, Math.min(255, Math.round(v)))); cache.set(key, c);
+      const veg = C < 6 || (hue > 35 && hue < 180) ? 1 : 0;
+      let L = q[0], a = q[1], b = q[2];
+      if (veg) {
+        const tree = TREE * Math.max(0, Math.min(1, (46 - L) / 14));                       // dark land = trees
+        const lw = Math.max(0, Math.min(1, (75 - L) / 15));                                // no push on bright rock/roads
+        const add = (VEG * lw * Math.max(0.3, 1 - C / 25)) * (1 - tree) + 20 * tree;        // chroma towards green
+        const keep = 1 - 0.6 * tree;                                                       // trees: hue mostly replaced by green
+        a = a * keep * (1 + VEG / 25) - add * 0.574; b = b * keep * (1 + VEG / 25) + add * 0.819;
+        L = L + tree * Math.max(0, 20 - L) * 0.4;                                          // deep shade inside forest: less black
+      }
+      c = lab2rgb(L, a, b).map(v => Math.max(0, Math.min(255, Math.round(v)))); cache.set(key, c);
     }
     out[i] = c[0]; out[i + 1] = c[1]; out[i + 2] = c[2];
   }
@@ -1701,8 +1710,8 @@ function realCells(p, m) {
     }
   }
   const lab = cand.map(c => ({ id: c.id, lab: rgb2lab(...hex2rgb(c.color)) }));
-  if (optMixes(use) && COL.mode === 'multi' && (!realCache.veg || realCache.vegS !== VEG)) { realCache.veg = vegTint(realCache.px); realCache.vegS = VEG; }
-  const rpx = COL.mode === 'multi' && optMixes(use) ? realCache.veg : realCache.px;
+  if (COL.mode === 'multi' && !realCache.veg) realCache.veg = vegTint(realCache.px);   // trees dark green, meadows greener
+  const rpx = COL.mode === 'multi' ? realCache.veg : realCache.px;
   let C = quantizeReal(rpx, lab, cw, ch);
   const cnt = new Map(); for (const v of C) cnt.set(v, (cnt.get(v) || 0) + 1);
   // the main filaments always stay (they are loaded anyway, used pure or inside mixes); the limit only picks the
