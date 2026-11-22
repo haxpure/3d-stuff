@@ -141,6 +141,8 @@
     <label class="check"><input type="checkbox" id="sFS"> I have the Full Spectrum pack (CMY + White/Gray/Black)</label>
     <div class="row hide" id="sEdRow"><label>Pack</label><select id="sEd"><option value="white">White Edition</option><option value="gray">Gray Edition</option><option value="black">CMY + Black</option></select></div>
     <label class="check"><input type="checkbox" id="sNoMix"> Only my filaments (no mix colors to set up in the slicer)</label>
+    <button type="button" id="sOpt" class="sec">Recalculate colors</button>
+    <div class="hint">Looks at the satellite photo and picks the mix colors (and their ratios) that get the most out of your filaments.</div>
     <div id="sRec" class="hide">
       <h3>Recommended for this area</h3>
       <div class="hint">The filament colors that match the satellite photo best (shadows taken out), one per filament that is on. Buy or load these for the most natural look.</div>
@@ -1637,6 +1639,46 @@ const realPixels = (p, m) => adjustColors(deshadeCells(imageryCells(p, m, state.
 // slicer slots: 4 main filaments + mixes, never more than this in total
 const MAX_SLOTS = 12;
 const extraSlots = () => (COL.labelFil === 'custom' && COL.mode !== 'four' ? 1 : 0) + (COL.cpoiFil === 'custom' && COL.mode !== 'four' && $('poiCenter').checked ? 1 : 0);
+// "Recalculate colors": which mixes of the loaded filaments reproduce the satellite photo best? Candidates are all
+// pairs in 10 % steps (20-80 %); starting from the pure filaments, the mix that lowers the photo error most is added,
+// until the slicer slots are full. Stored with the filament colors, so it only applies to exactly these filaments.
+// natural look: forest and meadows in the photo are close to gray, so gray mixes would win. Push yellow-green and
+// near-gray land (not bright rock, not water blue) towards green, so it gets the gray-green and dark green mixes.
+let VEG = 16;
+function vegTint(px) {
+  const out = new Uint8Array(px.length), cache = new Map();
+  for (let i = 0; i < px.length; i += 3) {
+    const key = (px[i] >> 2) << 12 | (px[i + 1] >> 2) << 6 | (px[i + 2] >> 2); let c = cache.get(key);
+    if (!c) {
+      const q = rgb2lab(px[i], px[i + 1], px[i + 2]), C = Math.hypot(q[1], q[2]), hue = Math.atan2(q[2], q[1]) * 180 / Math.PI;
+      const veg = C < 5 || (hue > 40 && hue < 175) ? 1 : 0, lw = Math.max(0, Math.min(1, (q[0] - 5) / 8, (75 - q[0]) / 15));
+      const add = VEG * veg * lw * Math.max(0.3, 1 - C / 25), f = veg ? 1 + VEG / 25 : 1;
+      c = lab2rgb(q[0], q[1] * f - add * 0.574, q[2] * f + add * 0.819).map(v => Math.max(0, Math.min(255, Math.round(v)))); cache.set(key, c);
+    }
+    out[i] = c[0]; out[i + 1] = c[1]; out[i + 2] = c[2];
+  }
+  return out;
+}
+const optSig = use => use.map(f => f.id + f.color.toLowerCase()).join(',');
+const optMixes = use => { const o = COL.simple && COL.simple.opt; return o && o.sig === optSig(use) && o.mixes.length ? o.mixes : null; };
+function optimizeMixes(px, use, cap) {
+  const cen = kmeans(px, 24), tot = cen.reduce((s, c) => s + c[3], 0) || 1, P = cen.map(c => ({ lab: rgb2lab(c[0], c[1], c[2]), w: c[3] / tot }));
+  // same distance as the print matching (quantizeReal)
+  const d2 = (q, l) => { const C1 = Math.hypot(q[1], q[2]), C2 = Math.hypot(l[1], l[2]), dC = C1 - C2, da = q[1] - l[1], db = q[2] - l[2];
+    return 0.45 * (q[0] - l[0]) ** 2 + dC * dC + 1.2 * Math.min(1, C1 / 20) * Math.max(0, da * da + db * db - dC * dC); };
+  const cand = [];
+  for (let i = 0; i < use.length; i++) for (let j = i + 1; j < use.length; j++) for (let k = 2; k <= 8; k++) {
+    const t = k / 10; cand.push({ a: use[i].id, b: use[j].id, t, lab: rgb2lab(...hex2rgb(lerpLin(use[i].color, use[j].color, t))) }); }
+  const best = P.map(q => Math.min(...use.map(f => d2(q.lab, rgb2lab(...hex2rgb(f.color))))));
+  const pick = [];
+  while (pick.length < cap) {
+    let bi = -1, bg = 1e-9;
+    cand.forEach((c, ci) => { if (c.used) return; let g = 0; P.forEach((q, k) => { const d = d2(q.lab, c.lab); if (d < best[k]) g += q.w * (best[k] - d); }); if (g > bg) { bg = g; bi = ci; } });
+    if (bi < 0) break;
+    const c = cand[bi]; c.used = true; pick.push({ a: c.a, b: c.b, t: c.t }); P.forEach((q, k) => { best[k] = Math.min(best[k], d2(q.lab, c.lab)); });
+  }
+  return pick;
+}
 function realCells(p, m) {
   const pal = PAL(), base = pal.fils.filter(f => f.real);
   // the blue filament that prints the water is not used for land: blue in the photo is haze or shade, not terrain
@@ -1647,6 +1689,11 @@ function realCells(p, m) {
   if (!realCache || realCache.key !== key) realCache = { key, px: realPixels(p, m) };
   let cand = use.map(f => ({ id: f.id, color: f.color }));
   if (COL.mode === 'fs') cand = FS.gamut(COL.fsEd).map((g, i) => ({ id: 7000 + i, name: 'Mix ' + g.recipe, color: g.hex, mix: true, base: g.single >= 0 }));
+  else if (COL.mode === 'multi' && COL.gSteps > 0 && optMixes(use)) {   // "Recalculate colors": the mixes picked for these filaments
+    let vid = 6500; const byId = id => use.find(f => f.id === id);
+    for (const q of optMixes(use)) { const a = byId(q.a), b = byId(q.b), t = q.t;
+      cand.push({ id: vid++, name: `${a.name} + ${b.name} ${Math.round((1 - t) * 100)}/${Math.round(t * 100)}`, color: lerpLin(a.color, b.color, t), mix: true, mixOf: [a.id, b.id], t }); }
+  }
   else if (COL.mode === 'multi' && COL.gSteps > 0) {
     const n = Math.min(10, COL.gSteps | 0); let vid = 6000;
     for (let i = 0; i < use.length; i++) for (let j = i + 1; j < use.length; j++) for (let k = 1; k <= n; k++) {
@@ -1654,7 +1701,9 @@ function realCells(p, m) {
     }
   }
   const lab = cand.map(c => ({ id: c.id, lab: rgb2lab(...hex2rgb(c.color)) }));
-  let C = quantizeReal(realCache.px, lab, cw, ch);
+  if (optMixes(use) && COL.mode === 'multi' && (!realCache.veg || realCache.vegS !== VEG)) { realCache.veg = vegTint(realCache.px); realCache.vegS = VEG; }
+  const rpx = COL.mode === 'multi' && optMixes(use) ? realCache.veg : realCache.px;
+  let C = quantizeReal(rpx, lab, cw, ch);
   const cnt = new Map(); for (const v of C) cnt.set(v, (cnt.get(v) || 0) + 1);
   // the main filaments always stay (they are loaded anyway, used pure or inside mixes); the limit only picks the
   // most used mixes: main + mixes + custom-color slots never exceed MAX_SLOTS, and with a slicer template the
@@ -1663,7 +1712,7 @@ function realCells(p, m) {
   let mixCap = Math.min(MAX_SLOTS - baseIds.length - extraSlots(), Math.max(0, (COL.maxCols | 0) - baseIds.length));
   const at = activeTpl(); if (at) mixCap = Math.min(mixCap, at.cfg.filament_is_mixed.filter(tplIsMix).length);
   const keep = new Set([...baseIds, ...[...cnt].filter(e => !baseIds.includes(e[0])).sort((a, b) => b[1] - a[1]).slice(0, Math.max(0, mixCap)).map(e => e[0])]);
-  if (keep.size < cnt.size) C = quantizeReal(realCache.px, lab.filter(q => keep.has(q.id)), cw, ch);
+  if (keep.size < cnt.size) C = quantizeReal(rpx, lab.filter(q => keep.has(q.id)), cw, ch);
   if (COL.cleanup > 0) { majority(C, cw, ch, Math.min(2, COL.cleanup)); removeSmall(C, cw, ch, Math.round((0.35 * COL.cleanup / Math.max(m.dx, m.dy)) ** 2)); }
   const used = new Set(C); let t0 = Math.max(0, ...pal.fils.map(f => f.tool));
   state.virt = cand.filter(c => c.mix && used.has(c.id)).map(c => ({ id: c.id, name: c.name, color: c.color, tool: ++t0, mix: true, mixOf: c.mixOf, t: c.t }));
@@ -1978,6 +2027,21 @@ $('sFS').addEventListener('change', () => { COL.simple.fs = $('sFS').checked; sa
 $('sNoMix').addEventListener('change', () => { COL.simple.noMix = $('sNoMix').checked; saveCOL(); queueSuggestions(true); refreshPick(); });
 $('sEd').addEventListener('change', () => { COL.simple.ed = $('sEd').value; saveCOL(); renderSimpleFils(); queueSuggestions(true); refreshPick(); });
 // keep the chosen look in sync with the filaments
+$('sOpt').addEventListener('click', async () => {
+  if (!state.dem) { setStatus('Load terrain first.', true); return; }
+  if (COL.simple.fs) { setStatus('With the Full Spectrum pack the mixes come from the pack.', true); return; }
+  try {
+    setStatus('Recalculating colors…'); await ensureImagery();
+    COL.simple.noMix = false; applySuggestion(suggestionList().findIndex(o => o.title === 'Satellite colors'));   // satellite colors with mixes
+    const p = params(), m = state.lastModel || computeModel(p, state.dem, featsFor(), Math.max(p.printW / 110, p.pitch));
+    const pal = PAL(), isBlue = f => { const q = rgb2lab(...hex2rgb(f.color)); return q[2] < -20 && -q[2] > Math.abs(q[1]); };
+    let use = pal.fils.filter(f => f.real); const land = use.filter(f => !(f.id === +pal.asg.water && isBlue(f))); if (land.length >= 2) use = land;
+    let cap = MAX_SLOTS - use.length - extraSlots(); const at = activeTpl(); if (at) cap = Math.min(cap, at.cfg.filament_is_mixed.filter(tplIsMix).length);
+    const mixes = optimizeMixes(vegTint(realPixels(p, m)), use, Math.max(0, cap));
+    COL.simple.opt = { sig: optSig(use), mixes }; saveCOL(); renderSimpleFils(); colorsChanged(true); queueSuggestions(true);
+    setStatus(`Colors recalculated: ${mixes.length} mix colors picked for your ${use.length} filaments.`);
+  } catch (e) { console.error(e); setStatus('Recalculating failed: ' + e.message, true); }
+});
 let pickTimer; function refreshPick() { clearTimeout(pickTimer); pickTimer = setTimeout(() => { if (!EXPERT && state.dem) applySuggestion(Math.max(0, COL.simple.pick)); }, 250); }
 // the 4 suggestions: each one is a full color setup (mode, palette, assignments) applied to COL
 function suggestionList() {
